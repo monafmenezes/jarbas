@@ -8,17 +8,31 @@
 export const FUSO = "America/Fortaleza";
 export const OFFSET = "-03:00";
 
-// Epoch (ms) da MEIA-NOITE de hoje NO FUSO DA MONALISA. Detalhe crucial: "hoje"
-// começa à 00:00 LOCAL, não no fuso do servidor — a "armadilha do relógio" de
-// novo. Por isso pegamos a data já no fuso dela e carimbamos o offset.
-export function inicioDoDia(agora: Date = new Date()): number {
-  // Formata a data no fuso dela. O locale "en-CA" dá o formato ISO AAAA-MM-DD,
-  // que é exatamente o que precisamos pra remontar a meia-noite local.
-  const dataLocal = new Intl.DateTimeFormat("en-CA", {
+// O DIA de hoje no fuso da Monalisa, no formato ISO "AAAA-MM-DD". É a chave que
+// identifica a dose do dia. O locale "en-CA" já entrega nesse formato.
+export function diaLocal(agora: Date = new Date()): string {
+  return new Intl.DateTimeFormat("en-CA", {
     timeZone: FUSO,
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
   }).format(agora);
-  return new Date(`${dataLocal}T00:00:00${OFFSET}`).getTime();
+}
+
+// A HORA de agora no fuso da Monalisa, no formato 24h "HH:MM" (ex.: "22:05").
+// Mesmo formato dos remédios — assim dá pra comparar direto ("já passou das 22h?").
+export function horaLocal(agora: Date = new Date()): string {
+  return new Intl.DateTimeFormat("en-GB", {
+    timeZone: FUSO,
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).format(agora);
+}
+
+// Epoch (ms) da MEIA-NOITE de hoje NO FUSO DA MONALISA. Detalhe crucial: "hoje"
+// começa à 00:00 LOCAL, não no fuso do servidor — a "armadilha do relógio" de
+// novo. Por isso pegamos a data já no fuso dela e carimbamos o offset.
+export function inicioDoDia(agora: Date = new Date()): number {
+  return new Date(`${diaLocal(agora)}T00:00:00${OFFSET}`).getTime();
 }
