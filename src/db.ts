@@ -57,6 +57,35 @@ db.exec(`
   )
 `);
 
+// Remédios cadastrados: o "quê" e o "que horas" de cada um. `hora` é local no
+// formato "HH:MM" (ex.: "22:00"); `ativo` permite "desligar" um remédio sem
+// apagar o histórico. Um remédio 2x/dia é cadastrado duas vezes (um por horário).
+db.exec(`
+  CREATE TABLE IF NOT EXISTS remedios (
+    id      INTEGER PRIMARY KEY AUTOINCREMENT,
+    nome    TEXT    NOT NULL,
+    hora    TEXT    NOT NULL,
+    destino TEXT    NOT NULL,
+    ativo   INTEGER NOT NULL DEFAULT 1
+  )
+`);
+
+// Doses do dia a dia: UMA linha por remédio por dia em que ele foi disparado.
+// É a "memória do dia" — responde "já tomei hoje?". `status` = pendente | tomado
+// | perdido. `avisos` conta quantas vezes já cutuquei (pra limitar a insistência);
+// `proximo_aviso` (epoch ms) é quando devo cutucar de novo.
+db.exec(`
+  CREATE TABLE IF NOT EXISTS doses (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    remedio_id    INTEGER NOT NULL,
+    destino       TEXT    NOT NULL,
+    dia           TEXT    NOT NULL,
+    status        TEXT    NOT NULL DEFAULT 'pendente',
+    avisos        INTEGER NOT NULL DEFAULT 0,
+    proximo_aviso INTEGER NOT NULL DEFAULT 0
+  )
+`);
+
 // Guarda um novo lembrete e devolve o id gerado.
 // Os "?" são placeholders: o valor entra separado do SQL, o que evita injeção.
 export function salvarLembrete(
@@ -132,4 +161,173 @@ export function gastosPorCategoria(
     )
     .all(destino, desde);
   return linhas as unknown as ResumoCategoria[];
+}
+
+// ─── Medicação ───────────────────────────────────────────────────────────────
+
+// Um remédio cadastrado.
+export interface Remedio {
+  id: number;
+  nome: string;
+  hora: string; // "HH:MM" local, ex.: "22:00"
+  destino: string; // JID da conversa pra onde avisar
+  ativo: number; // 1 = ligado / 0 = desligado
+}
+
+// O estado de uma dose no dia: esperando, confirmada, ou perdida (deu 1h e nada).
+export type StatusDose = "pendente" | "tomado" | "perdido";
+
+// Uma dose de um dia específico.
+export interface Dose {
+  id: number;
+  remedio_id: number;
+  destino: string;
+  dia: string; // "YYYY-MM-DD" local
+  status: StatusDose;
+  avisos: number; // quantos avisos já mandei desta dose
+  proximo_aviso: number; // epoch ms de quando cutucar de novo
+}
+
+// Cadastra um remédio e devolve o id gerado.
+export function salvarRemedio(
+  nome: string,
+  hora: string,
+  destino: string,
+): number {
+  const r = db
+    .prepare("INSERT INTO remedios (nome, hora, destino) VALUES (?, ?, ?)")
+    .run(nome, hora, destino);
+  return Number(r.lastInsertRowid);
+}
+
+// Todos os remédios ligados. O verificador varre esta lista pra saber o que
+// disparar e a que horas.
+export function remediosAtivos(): Remedio[] {
+  const linhas = db
+    .prepare("SELECT id, nome, hora, destino, ativo FROM remedios WHERE ativo = 1")
+    .all();
+  return linhas as unknown as Remedio[];
+}
+
+// Os remédios ligados de UMA conversa, ordenados por horário — é a lista que a
+// pessoa vê quando pergunta "quais remédios eu tomo?".
+export function remediosAtivosDe(destino: string): Remedio[] {
+  const linhas = db
+    .prepare(
+      "SELECT id, nome, hora, destino, ativo FROM remedios " +
+        "WHERE ativo = 1 AND destino = ? ORDER BY hora",
+    )
+    .all(destino);
+  return linhas as unknown as Remedio[];
+}
+
+// Já existe um remédio ativo IGUAL (mesmo nome e mesma hora) nesta conversa? Usado
+// no cadastro pra não criar duplicata (que viraria aviso em dobro no mesmo horário).
+// Mesmo nome em horário DIFERENTE é permitido (ex.: um remédio 2x/dia).
+export function jaCadastrado(
+  nome: string,
+  hora: string,
+  destino: string,
+): boolean {
+  const linha = db
+    .prepare(
+      "SELECT 1 FROM remedios WHERE ativo = 1 AND destino = ? " +
+        "AND lower(nome) = lower(?) AND hora = ? LIMIT 1",
+    )
+    .get(destino, nome, hora);
+  return linha !== undefined;
+}
+
+// Cria a dose (pendente) de um remédio num dia. Devolve o id gerado.
+export function criarDose(
+  remedioId: number,
+  destino: string,
+  dia: string,
+): number {
+  const r = db
+    .prepare("INSERT INTO doses (remedio_id, destino, dia) VALUES (?, ?, ?)")
+    .run(remedioId, destino, dia);
+  return Number(r.lastInsertRowid);
+}
+
+// A dose de um remédio num dia, se já existir. Serve pra NÃO criar a mesma dose
+// duas vezes (o verificador roda a cada minuto; a dose do dia é única).
+export function doseDoDia(remedioId: number, dia: string): Dose | undefined {
+  const linha = db
+    .prepare(
+      "SELECT id, remedio_id, destino, dia, status, avisos, proximo_aviso " +
+        "FROM doses WHERE remedio_id = ? AND dia = ?",
+    )
+    .get(remedioId, dia);
+  return linha as Dose | undefined;
+}
+
+// Muda o status de uma dose (ex.: 'tomado' quando ela confirma, 'perdido' se
+// passou 1h sem confirmar).
+export function marcarDose(id: number, status: StatusDose): void {
+  db.prepare("UPDATE doses SET status = ? WHERE id = ?").run(status, id);
+}
+
+// Registra que mandei mais um aviso desta dose: soma 1 no contador e agenda o
+// próximo aviso (epoch ms). O contador é o que limita a insistência (paro após N).
+export function registrarAviso(doseId: number, proximoAviso: number): void {
+  db.prepare(
+    "UPDATE doses SET avisos = avisos + 1, proximo_aviso = ? WHERE id = ?",
+  ).run(proximoAviso, doseId);
+}
+
+// Doses ainda PENDENTES cujo próximo aviso já venceu (proximo_aviso <= agora) —
+// são as que o verificador precisa cutucar de novo (ou desistir, se já insistiu
+// demais). Só pendentes: uma dose 'tomado'/'perdido' não recebe mais aviso.
+export function dosesParaAvisar(agora: number): Dose[] {
+  const linhas = db
+    .prepare(
+      "SELECT id, remedio_id, destino, dia, status, avisos, proximo_aviso " +
+        "FROM doses WHERE status = 'pendente' AND proximo_aviso <= ?",
+    )
+    .all(agora);
+  return linhas as unknown as Dose[];
+}
+
+// Um remédio pelo id — o verificador usa pra saber o NOME na hora de reavisar.
+export function remedioPorId(id: number): Remedio | undefined {
+  const linha = db
+    .prepare("SELECT id, nome, hora, destino, ativo FROM remedios WHERE id = ?")
+    .get(id);
+  return linha as Remedio | undefined;
+}
+
+// Doses ainda pendentes de HOJE numa conversa — são as que a confirmação
+// ("tomei") marca como tomadas de uma vez.
+export function dosesPendentesDe(destino: string, dia: string): Dose[] {
+  const linhas = db
+    .prepare(
+      "SELECT id, remedio_id, destino, dia, status, avisos, proximo_aviso " +
+        "FROM doses WHERE status = 'pendente' AND destino = ? AND dia = ?",
+    )
+    .all(destino, dia);
+  return linhas as unknown as Dose[];
+}
+
+// "Apaga" um remédio: na verdade DESLIGA (ativo = 0) — para de avisar e some da
+// lista, mas o histórico de doses fica preservado (soft delete). Usado quando o
+// tratamento acaba (ex.: um antibiótico de 15 dias).
+export function desativarRemedio(id: number): void {
+  db.prepare("UPDATE remedios SET ativo = 0 WHERE id = ?").run(id);
+}
+
+// Procura um remédio ativo pelo nome (sem diferenciar maiúsculas) numa conversa
+// — é como a gente vai achar QUAL remédio desligar quando ela disser "apaga a
+// vitamina D". Devolve o primeiro que casar, ou undefined.
+export function remedioAtivoPorNome(
+  nome: string,
+  destino: string,
+): Remedio | undefined {
+  const linha = db
+    .prepare(
+      "SELECT id, nome, hora, destino, ativo FROM remedios " +
+        "WHERE ativo = 1 AND destino = ? AND lower(nome) = lower(?)",
+    )
+    .get(destino, nome);
+  return linha as Remedio | undefined;
 }

@@ -10,10 +10,19 @@ const destino = "teste@s.whatsapp.net";
 
 const frases = [
   "gastei 45,90 no mercado", // → registrar_gasto
-  "paguei 12 de uber pro trabalho", // → registrar_gasto
-  "quanto gastei hoje?", // → consultar_gastos (o extrato do dia)
-  "me lembra de pagar o boleto amanhã às 9h", // → criar_lembrete (não regrediu)
-  "qual a capital da França?", // → conversa (não virou gasto)
+  "quanto gastei hoje?", // → consultar_gastos
+  // --- gestão de remédios (a história completa) ---
+  "tomo o anticoncepcional todo dia às 22h", // cadastra
+  "tomo o anticoncepcional todo dia às 22h", // duplicata → deve avisar, não duplicar
+  "me lembra de tomar vitamina D às 8h todo dia", // cadastra (≠ lembrete!)
+  "quais remédios eu tomo?", // lista os dois
+  "para de me lembrar do anticoncepcional", // remove
+  "quais remédios eu tomo?", // lista só a vitamina D agora
+  "já tomei o remédio hoje?", // → consultar_remedios (status do dia)
+  "tomei", // → atalho de confirmação (NÃO passa pelo cérebro)
+  // --- não-regressão ---
+  "me lembra de pagar o boleto amanhã às 9h", // → criar_lembrete
+  "qual a capital da França?", // → conversa
 ];
 
 for (const frase of frases) {

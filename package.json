@@ -13,7 +13,10 @@
     "testar:gasto": "node --env-file=.env --import tsx src/testes/testar-gasto.ts",
     "testar:roteador": "JARBAS_DB=:memory: node --env-file=.env --import tsx src/testes/testar-roteador.ts",
     "testar:relatorio": "JARBAS_DB=:memory: node --import tsx src/testes/testar-relatorio.ts",
-    "testar:consulta": "JARBAS_DB=:memory: node --import tsx src/testes/testar-consulta.ts"
+    "testar:consulta": "JARBAS_DB=:memory: node --import tsx src/testes/testar-consulta.ts",
+    "testar:remedio": "JARBAS_DB=:memory: node --import tsx src/testes/testar-remedio.ts",
+    "testar:verificar": "JARBAS_DB=:memory: node --import tsx src/testes/testar-verificar-remedios.ts",
+    "testar:confirmar": "JARBAS_DB=:memory: node --import tsx src/testes/testar-confirmar-remedio.ts"
   },
   "devDependencies": {
     "@types/node": "^22.10.2",

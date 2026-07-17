@@ -9,6 +9,7 @@
 import { Cron } from "croner";
 import { lembretesVencidos, marcarAvisado, destinosComGastos } from "./db.ts";
 import { relatorioSemanal } from "./skills/relatorio-financeiro.ts";
+import { verificarRemedios } from "./skills/verificar-remedios.ts";
 
 // De quanto em quanto tempo checamos. 30s dá precisão de ~meio minuto, que é de
 // sobra pra lembretes do dia a dia, sem ficar martelando o banco.
@@ -34,9 +35,17 @@ export function iniciarAgendador(enviar: Enviar): void {
         console.log(`⚠️ falhou ao avisar lembrete ${l.id}:`, erro);
       }
     }
+
+    // No mesmo pulso, checa os remédios: dispara os do horário e insiste nos
+    // pendentes. A skill cuida de tudo; um erro dela não pode derrubar o loop.
+    try {
+      await verificarRemedios(enviar);
+    } catch (erro) {
+      console.log("⚠️ falhou ao verificar remédios:", erro);
+    }
   }, INTERVALO_MS);
 
-  console.log("⏰ Agendador de lembretes de pé.");
+  console.log("⏰ Agendador de lembretes e remédios de pé.");
 
   // Relatório financeiro semanal. AGORA sim é cron: uma tarefa que se REPETE
   // num horário fixo (todo domingo às 20h) — o oposto do lembrete pontual.

@@ -5,8 +5,18 @@
 
 import type { Brain } from "./brain.ts";
 import { acharUrl, baixarTextoDoLink } from "./skills/resumir-link.ts";
-import { salvarLembrete, salvarGasto } from "./db.ts";
+import {
+  salvarLembrete,
+  salvarGasto,
+  salvarRemedio,
+  remedioAtivoPorNome,
+  desativarRemedio,
+  jaCadastrado,
+} from "./db.ts";
 import { extratoDeHoje } from "./skills/consultar-gastos.ts";
+import { listaDeRemedios } from "./skills/listar-remedios.ts";
+import { ehConfirmacao, confirmarRemedios } from "./skills/confirmar-remedio.ts";
+import { statusDeHoje } from "./skills/status-remedios.ts";
 
 // `destino` é o JID da conversa: precisamos dele pra guardar o lembrete e o
 // agendador saber pra onde mandar o aviso depois.
@@ -15,6 +25,13 @@ export async function rotearTexto(
   brain: Brain,
   destino: string,
 ): Promise<string> {
+  // 0. ATALHO: "tomei" é confirmação por palavra-chave. Checamos ANTES do cérebro
+  //    — é instantâneo, robusto e não gasta uma chamada de IA (decisão dela).
+  if (ehConfirmacao(texto)) {
+    console.log(`💬 "${texto}" → confirmação de remédio`);
+    return confirmarRemedios(destino);
+  }
+
   // 1. Pergunta ao cérebro O QUE a pessoa quer.
   const intencao = await brain.classificarIntencao(texto);
   console.log(`💬 "${texto}" → intenção: ${intencao}`);
@@ -74,5 +91,40 @@ export async function rotearTexto(
     case "consultar_gastos":
       // Só lê e resume o que já está no banco — sem cérebro, sem efeito colateral.
       return extratoDeHoje(destino);
+
+    case "cadastrar_remedio": {
+      const remedio = await brain.extrairRemedio(texto);
+      if (!remedio) {
+        return '💊 entendi que é um remédio, mas não peguei o horário. Tenta assim: "tomo o anticoncepcional todo dia às 22h".';
+      }
+      // Não duplica: mesmo remédio no mesmo horário já cadastrado é ignorado.
+      if (jaCadastrado(remedio.nome, remedio.hora, destino)) {
+        return `💊 o ${remedio.nome} das ${remedio.hora} já está na sua lista. 😉`;
+      }
+      salvarRemedio(remedio.nome, remedio.hora, destino);
+      return `💊 anotado! vou te lembrar de tomar ${remedio.nome} todo dia às ${remedio.hora}. Quando tomar, é só responder "tomei".`;
+    }
+
+    case "remover_remedio": {
+      const nome = await brain.extrairNomeRemedio(texto);
+      if (!nome) {
+        return '💊 não entendi qual remédio você quer parar. Tenta: "para de me lembrar da vitamina D".';
+      }
+      // Acha o remédio ativo pelo nome (busca ignora maiúsculas) e desliga.
+      const remedio = remedioAtivoPorNome(nome, destino);
+      if (!remedio) {
+        return `💊 não achei nenhum remédio ativo chamado "${nome}".`;
+      }
+      desativarRemedio(remedio.id);
+      return `💊 ok! parei de te lembrar de ${remedio.nome}. 👍`;
+    }
+
+    case "listar_remedios":
+      // Só lê e formata a lista — sem cérebro.
+      return listaDeRemedios(destino);
+
+    case "consultar_remedios":
+      // "já tomei hoje?" — mostra o status das doses do dia.
+      return statusDeHoje(destino);
   }
 }

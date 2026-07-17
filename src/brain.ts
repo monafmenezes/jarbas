@@ -13,6 +13,10 @@ export type Intencao =
   | "criar_lembrete" // quer ser lembrado de algo no futuro
   | "registrar_gasto" // está anotando um gasto ("gastei 45 no mercado")
   | "consultar_gastos" // quer SABER quanto/no que gastou ("quanto gastei hoje?")
+  | "cadastrar_remedio" // quer ser lembrada de um remédio recorrente
+  | "remover_remedio" // quer PARAR de ser lembrada de um remédio
+  | "listar_remedios" // quer VER a lista de remédios cadastrados
+  | "consultar_remedios" // quer saber se JÁ TOMOU hoje ("já tomei o remédio?")
   | "conversa"; // qualquer outra coisa: papo livre, pergunta, dúvida
 
 // ─── O CONTRATO ──────────────────────────────────────────────────────────────
@@ -31,6 +35,12 @@ export interface Brain {
   // Lê um registro de gasto ("gastei 45,90 no mercado") e extrai quanto, em que
   // categoria e a descrição. Devolve null se não der pra achar um valor.
   extrairGasto(texto: string): Promise<GastoExtraido | null>;
+  // Lê um cadastro de remédio ("tomo o anticoncepcional todo dia às 22h") e
+  // extrai o nome e a hora ("HH:MM"). Devolve null se não der pra achar a hora.
+  extrairRemedio(texto: string): Promise<RemedioExtraido | null>;
+  // Lê um pedido de remoção ("para de me lembrar da vitamina D") e extrai só o
+  // nome do remédio. Devolve null se não achar um nome.
+  extrairNomeRemedio(texto: string): Promise<string | null>;
   // Recebe os bytes crus de um áudio (OGG/Opus, como o WhatsApp manda) e
   // devolve o texto falado — transcrição de voz pra texto.
   transcrever(audio: Uint8Array): Promise<string>;
@@ -49,6 +59,12 @@ export interface GastoExtraido {
   centavos: number; // R$ 45,90 -> 4590
   categoria: string; // uma das CATEGORIAS abaixo
   descricao: string; // o texto do que foi comprado ("mercado", "uber")
+}
+
+// O que sai da extração de um cadastro de remédio.
+export interface RemedioExtraido {
+  nome: string; // "anticoncepcional", "vitamina D"
+  hora: string; // "HH:MM" local, ex.: "22:00"
 }
 
 // Lista fechada de categorias. Manter fixa faz o relatório somar direito (sem
@@ -130,6 +146,17 @@ export class OpenAIBrain implements Brain {
             '- "consultar_gastos": a pessoa quer SABER quanto ou no que já gastou, ' +
             'SEM informar um valor novo (ex.: "quanto gastei hoje?", "meus gastos de ' +
             'hoje", "quanto já torrei hoje").\n' +
+            '- "cadastrar_remedio": a pessoa quer passar a ser lembrada de um ' +
+            'REMÉDIO recorrente (todo dia), com nome e horário (ex.: "tomo o ' +
+            'anticoncepcional todo dia às 22h", "me lembra de tomar vitamina D às 8h").\n' +
+            '- "remover_remedio": a pessoa quer PARAR de ser lembrada de um remédio ' +
+            '(ex.: "para de me lembrar da vitamina D", "não tomo mais o antibiótico", ' +
+            '"apaga o omeprazol").\n' +
+            '- "listar_remedios": a pessoa quer VER quais remédios cadastrou ' +
+            '(ex.: "quais remédios eu tomo?", "meus remédios", "lista os remédios").\n' +
+            '- "consultar_remedios": a pessoa quer saber se JÁ TOMOU o remédio hoje ' +
+            'ou o que falta tomar (ex.: "já tomei o remédio hoje?", "tomei meus ' +
+            'remédios?", "o que falta tomar hoje?").\n' +
             '- "conversa": qualquer outra coisa (pergunta, papo, dúvida geral).',
         },
         { role: "user", content: texto },
@@ -145,6 +172,10 @@ export class OpenAIBrain implements Brain {
       "criar_lembrete",
       "registrar_gasto",
       "consultar_gastos",
+      "cadastrar_remedio",
+      "remover_remedio",
+      "listar_remedios",
+      "consultar_remedios",
       "conversa",
     ] as const;
     const intencao: unknown = JSON.parse(bruto)?.intencao;
@@ -280,6 +311,66 @@ export class OpenAIBrain implements Brain {
         : categoria; // se vier vazia, a própria categoria já descreve
 
     return { centavos, categoria, descricao };
+  }
+
+  async extrairRemedio(texto: string): Promise<RemedioExtraido | null> {
+    const resposta = await this.client.chat.completions.create({
+      model: MODELO,
+      response_format: { type: "json_object" },
+      messages: [
+        {
+          role: "system",
+          content:
+            `Você cadastra lembretes de remédio. Responda APENAS um JSON no ` +
+            `formato {"nome": "...", "hora": "..."} onde:\n` +
+            `- nome: o nome do remédio, curto e sem "tomo"/"me lembra" (ex.: "anticoncepcional").\n` +
+            `- hora: o horário diário no formato 24h "HH:MM" (ex.: "22:00", "08:00").\n` +
+            `REGRA: se a mensagem NÃO indicar um horário, "hora" DEVE ser null.\n` +
+            `Exemplos:\n` +
+            `"tomo o anticoncepcional todo dia às 22h" -> {"nome":"anticoncepcional","hora":"22:00"}\n` +
+            `"me lembra de tomar vitamina D às 8 da manhã" -> {"nome":"vitamina D","hora":"08:00"}\n` +
+            `"tomo dipirona" -> {"nome":"dipirona","hora":null}`,
+        },
+        { role: "user", content: texto },
+      ],
+    });
+
+    const bruto = resposta.choices[0]?.message.content ?? "{}";
+    const dados = JSON.parse(bruto) as { nome?: unknown; hora?: unknown };
+
+    // Precisa de nome E de uma hora no formato "HH:MM" (validamos com regex —
+    // a saída do LLM é "texto de estranho" até provar que está no formato certo).
+    if (typeof dados.nome !== "string" || !dados.nome.trim()) return null;
+    if (typeof dados.hora !== "string" || !/^\d{2}:\d{2}$/.test(dados.hora)) {
+      return null;
+    }
+
+    return { nome: dados.nome.trim(), hora: dados.hora };
+  }
+
+  async extrairNomeRemedio(texto: string): Promise<string | null> {
+    const resposta = await this.client.chat.completions.create({
+      model: MODELO,
+      response_format: { type: "json_object" },
+      messages: [
+        {
+          role: "system",
+          content:
+            `A pessoa quer PARAR de ser lembrada de um remédio. Extraia só o nome ` +
+            `do remédio. Responda APENAS um JSON {"nome": "..."} (nome null se não achar).\n` +
+            `Exemplos:\n` +
+            `"para de me lembrar da vitamina D" -> {"nome":"vitamina D"}\n` +
+            `"não tomo mais o antibiótico" -> {"nome":"antibiótico"}\n` +
+            `"apaga o omeprazol" -> {"nome":"omeprazol"}`,
+        },
+        { role: "user", content: texto },
+      ],
+    });
+
+    const bruto = resposta.choices[0]?.message.content ?? "{}";
+    const dados = JSON.parse(bruto) as { nome?: unknown };
+    if (typeof dados.nome !== "string" || !dados.nome.trim()) return null;
+    return dados.nome.trim();
   }
 
   async transcrever(audio: Uint8Array): Promise<string> {
