@@ -39,6 +39,7 @@ corrida, estudo, ciclo menstrual e por aí vai. É só ir adicionando (veja o ro
 - [x] **Fase 0 — Setup** · esqueleto TypeScript rodando
 - [ ] **Fase 1 — 📝 Assistente** · salvar/resumir link, transcrever áudio, criar lembrete
 - [ ] **Fase 2 — 💰 Financeiro** · "gastei 45 no mercado" → categoriza, guarda e manda relatório semanal
+  - _evoluções previstas:_ corrigir/atualizar um gasto já lançado · listar os gastos do dia ("quanto gastei hoje?")
 - [ ] **Fase 3 — 🍽️ Calorias** · foto da refeição → estima o prato e as calorias
 
 ### No radar (backlog de skills)
