@@ -6,10 +6,13 @@
   "scripts": {
     "dev": "node --env-file=.env --watch --import tsx src/index.ts",
     "start": "node --env-file=.env --import tsx src/index.ts",
-    "testar:cerebro": "node --env-file=.env --import tsx src/testar-cerebro.ts",
-    "testar:link": "node --import tsx src/testar-link.ts",
-    "testar:db": "JARBAS_DB=:memory: node --import tsx src/testar-db.ts",
-    "testar:lembrete": "node --env-file=.env --import tsx src/testar-lembrete.ts"
+    "testar:cerebro": "node --env-file=.env --import tsx src/testes/testar-cerebro.ts",
+    "testar:link": "node --import tsx src/testes/testar-link.ts",
+    "testar:db": "JARBAS_DB=:memory: node --import tsx src/testes/testar-db.ts",
+    "testar:lembrete": "node --env-file=.env --import tsx src/testes/testar-lembrete.ts",
+    "testar:gasto": "node --env-file=.env --import tsx src/testes/testar-gasto.ts",
+    "testar:roteador": "JARBAS_DB=:memory: node --env-file=.env --import tsx src/testes/testar-roteador.ts",
+    "testar:relatorio": "JARBAS_DB=:memory: node --import tsx src/testes/testar-relatorio.ts"
   },
   "devDependencies": {
     "@types/node": "^22.10.2",
@@ -22,6 +25,7 @@
     "@hapi/boom": "^10.0.1",
     "@whiskeysockets/baileys": "^7.0.0-rc13",
     "cheerio": "^1.2.0",
+    "croner": "^10.0.1",
     "openai": "^6.48.0",
     "pino": "^10.3.1"
   }

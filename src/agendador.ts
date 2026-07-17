@@ -6,11 +6,16 @@
 // tempos, pergunta ao banco "algum lembrete venceu?". Bônus: como ele relê o
 // banco a cada volta, os lembretes SOBREVIVEM a reiniciar o bot.
 
-import { lembretesVencidos, marcarAvisado } from "./db.ts";
+import { Cron } from "croner";
+import { lembretesVencidos, marcarAvisado, destinosComGastos } from "./db.ts";
+import { relatorioSemanal } from "./skills/relatorio-financeiro.ts";
 
 // De quanto em quanto tempo checamos. 30s dá precisão de ~meio minuto, que é de
 // sobra pra lembretes do dia a dia, sem ficar martelando o banco.
 const INTERVALO_MS = 30_000;
+
+// Uma semana em ms — a janela do relatório ("gastos dos últimos 7 dias").
+const UMA_SEMANA_MS = 7 * 24 * 60 * 60 * 1000;
 
 // Recebe a função de envio de fora (desacoplado do Baileys): o agendador não
 // sabe que existe WhatsApp, só sabe "mandar um texto pra um destino".
@@ -32,4 +37,28 @@ export function iniciarAgendador(enviar: Enviar): void {
   }, INTERVALO_MS);
 
   console.log("⏰ Agendador de lembretes de pé.");
+
+  // Relatório financeiro semanal. AGORA sim é cron: uma tarefa que se REPETE
+  // num horário fixo (todo domingo às 20h) — o oposto do lembrete pontual.
+  // A expressão "0 20 * * 0" são 5 campos: minuto hora dia-do-mês mês dia-da-semana.
+  //   0    → minuto 0
+  //   20   → 20h (8 da noite)
+  //   * *  → qualquer dia do mês, qualquer mês
+  //   0    → domingo (0=dom, 1=seg, ... 6=sáb)
+  // timeZone garante que "20h" é no fuso da Monalisa, não no do servidor.
+  new Cron("0 20 * * 0", { timezone: "America/Fortaleza" }, async () => {
+    const desde = Date.now() - UMA_SEMANA_MS;
+    // Um resumo por conversa que teve gastos (hoje só a self-chat dela).
+    for (const destino of destinosComGastos(desde)) {
+      const texto = relatorioSemanal(destino, desde);
+      if (!texto) continue; // sem gastos nessa conversa: nada a enviar
+      try {
+        await enviar(destino, texto);
+      } catch (erro) {
+        console.log(`⚠️ falhou ao mandar o relatório pra ${destino}:`, erro);
+      }
+    }
+  });
+
+  console.log("📊 Relatório financeiro semanal agendado (domingos, 20h).");
 }
