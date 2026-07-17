@@ -1,8 +1,8 @@
 # Jarbas 🤵
 
 > Assistente pessoal **modular** no WhatsApp — um mordomo digital que salva links,
-> transcreve áudios, cuida das suas finanças e até estima as calorias do seu prato
-> por foto.
+> transcreve áudios, cuida das suas finanças, lembra dos seus remédios e até estima
+> as calorias do seu prato por foto.
 
 ![status](https://img.shields.io/badge/status-em%20desenvolvimento-yellow)
 ![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?logo=typescript&logoColor=white)
@@ -37,9 +37,9 @@ corrida, estudo, ciclo menstrual e por aí vai. É só ir adicionando (veja o ro
 ### Em construção (ordem de build)
 
 - [x] **Fase 0 — Setup** · esqueleto TypeScript rodando
-- [ ] **Fase 1 — 📝 Assistente** · salvar/resumir link, transcrever áudio, criar lembrete
-- [ ] **Fase 2 — 💰 Financeiro** · "gastei 45 no mercado" → categoriza, guarda e manda relatório semanal
-  - _evoluções previstas:_ corrigir/atualizar um gasto já lançado · listar os gastos do dia ("quanto gastei hoje?")
+- [x] **Fase 1 — 📝 Assistente** · salvar/resumir link, transcrever áudio, criar lembrete
+- [x] **Fase 2 — 💰 Financeiro** · "gastei 45 no mercado" → categoriza, guarda e manda relatório semanal
+  - [x] listar os gastos do dia ("quanto gastei hoje?") · _corrigir um gasto lançado: despriorizado_
 - [ ] **Fase 3 — 🍽️ Calorias** · foto da refeição → estima o prato e as calorias
 
 ### No radar (backlog de skills)
@@ -55,7 +55,7 @@ corrida, estudo, ciclo menstrual e por aí vai. É só ir adicionando (veja o ro
 
 **❤️ Bem-estar & saúde**
 - [ ] 🌱 **Bem-estar** · check-in diário de humor/gratidão com tendências
-- [ ] 💊 **Medicação** · registra remédio e avisa na hora
+- [x] 💊 **Medicação** · cadastra remédios, avisa na hora e **insiste até você confirmar** ("tomei"); "já tomei hoje?" mostra o status do dia
 - [ ] 🌸 **Ciclo menstrual** · registra o ciclo, prevê menstruação/período fértil e avisa
 - [ ] 🏃 **Corrida** · previsão do tempo pra treino e registro de corridas
 - [ ] 🍳 **O que cozinhar** · "tenho ovo, tomate e arroz" → sugestões de receita
