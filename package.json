@@ -7,7 +7,9 @@
     "dev": "node --env-file=.env --watch --import tsx src/index.ts",
     "start": "node --env-file=.env --import tsx src/index.ts",
     "testar:cerebro": "node --env-file=.env --import tsx src/testar-cerebro.ts",
-    "testar:link": "node --import tsx src/testar-link.ts"
+    "testar:link": "node --import tsx src/testar-link.ts",
+    "testar:db": "JARBAS_DB=:memory: node --import tsx src/testar-db.ts",
+    "testar:lembrete": "node --env-file=.env --import tsx src/testar-lembrete.ts"
   },
   "devDependencies": {
     "@types/node": "^22.10.2",

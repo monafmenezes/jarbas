@@ -22,7 +22,21 @@ export interface Brain {
   classificarIntencao(texto: string): Promise<Intencao>;
   // Responde uma mensagem livre, como um chat comum (o "ChatGPT no zap").
   conversar(texto: string): Promise<string>;
+  // Lê um pedido de lembrete e extrai O QUÊ lembrar e QUANDO (epoch em ms).
+  // Devolve null se não der pra entender a hora. `agora` é a referência de tempo.
+  extrairLembrete(texto: string, agora: Date): Promise<LembreteExtraido | null>;
 }
+
+// O que sai da extração de um lembrete: só o essencial (o banco cuida do resto).
+export interface LembreteExtraido {
+  texto: string; // o que lembrar, já limpo (sem "me lembra de")
+  quando: number; // epoch em ms (UTC) — o instante de disparar
+}
+
+// Fuso da Monalisa (João Pessoa/PB): UTC-3, e o Brasil não tem mais horário de
+// verão, então o offset é fixo. Por isso podemos carimbar "-03:00" com segurança.
+const FUSO = "America/Fortaleza";
+const OFFSET = "-03:00";
 
 // Modelo padrão das chamadas. gpt-4o-mini é barato e mais que suficiente pra
 // resumo e classificação de intenção. Se um dia uma tarefa exigir mais (ex.:
@@ -117,5 +131,53 @@ export class OpenAIBrain implements Brain {
       resposta.choices[0]?.message.content?.trim() ??
       "🤔 não consegui pensar numa resposta agora."
     );
+  }
+
+  async extrairLembrete(
+    texto: string,
+    agora: Date,
+  ): Promise<LembreteExtraido | null> {
+    // Descreve "agora" no fuso da Monalisa pra dar ao modelo a referência de tempo.
+    const agoraLocal = new Intl.DateTimeFormat("pt-BR", {
+      timeZone: FUSO,
+      dateStyle: "full",
+      timeStyle: "short",
+    }).format(agora);
+
+    const resposta = await this.client.chat.completions.create({
+      model: MODELO,
+      response_format: { type: "json_object" },
+      messages: [
+        {
+          role: "system",
+          content:
+            `Você extrai lembretes de mensagens. Agora é ${agoraLocal} ` +
+            `(fuso ${FUSO}, UTC${OFFSET}). Responda APENAS um JSON no formato ` +
+            `{"texto": "...", "quando": "..."} onde:\n` +
+            `- texto: o que lembrar, curto e sem "me lembra de" (ex.: "pagar o boleto").\n` +
+            `- quando: a data e hora LOCAL do disparo no formato "AAAA-MM-DDTHH:MM", ` +
+            `calculada a partir de "agora".\n` +
+            `REGRA IMPORTANTE: se a mensagem NÃO indicar um horário, dia ou prazo, ` +
+            `"quando" DEVE ser null. Nunca use o horário atual como padrão nem invente uma hora.\n` +
+            `Exemplos:\n` +
+            `"me lembra de comprar pão" -> {"texto":"comprar pão","quando":null}\n` +
+            `"me lembra de pagar amanhã às 9h" -> {"texto":"pagar","quando":"<amanhã>T09:00"}`,
+        },
+        { role: "user", content: texto },
+      ],
+    });
+
+    const bruto = resposta.choices[0]?.message.content ?? "{}";
+    const dados = JSON.parse(bruto) as { texto?: unknown; quando?: unknown };
+    if (typeof dados.texto !== "string" || typeof dados.quando !== "string") {
+      return null; // o modelo não conseguiu identificar o quê ou o quando
+    }
+
+    // O código faz a conta (o LLM só raciocinou o calendário): carimba o fuso
+    // dela no horário local e converte pra epoch. Assim independe do fuso do servidor.
+    const quando = new Date(`${dados.quando}${OFFSET}`).getTime();
+    if (Number.isNaN(quando)) return null;
+
+    return { texto: dados.texto, quando };
   }
 }

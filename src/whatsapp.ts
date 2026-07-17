@@ -13,6 +13,21 @@ import qrcode from "qrcode-terminal";
 import pino from "pino";
 import type { Brain } from "./brain.ts";
 import { acharUrl, baixarTextoDoLink } from "./skills/resumir-link.ts";
+import { salvarLembrete } from "./db.ts";
+
+// Referência viva do socket. Quando a conexão cai e reconecta, criamos um sock
+// NOVO — então quem envia mensagens de fora do fluxo (o agendador) não pode
+// guardar um sock fixo; consulta esta variável, que apontamos pro sock atual.
+let sockAtual: ReturnType<typeof makeWASocket> | null = null;
+
+// Envia uma mensagem já assinada com o 🤵. Usada pelo agendador de lembretes.
+export async function enviar(destino: string, texto: string): Promise<void> {
+  if (!sockAtual) {
+    console.log("⚠️ sem conexão no momento — não deu pra enviar agora.");
+    return;
+  }
+  await sockAtual.sendMessage(destino, { text: `🤵 ${texto}` });
+}
 
 // Recebe o "cérebro" de fora (injeção de dependência): a conexão não sabe se é
 // OpenAI ou Claude, só conhece o contrato Brain. Trocar de provedor não toca aqui.
@@ -33,6 +48,7 @@ export async function conectarWhatsApp(brain: Brain) {
     auth: state,
     logger: pino({ level: "silent" }),
   });
+  sockAtual = sock; // deixa esta conexão disponível pro agendador enviar lembretes
 
   // 4. Sempre que as credenciais mudarem, salva de volta na pasta ./auth.
   sock.ev.on("creds.update", saveCreds);
@@ -127,9 +143,23 @@ export async function conectarWhatsApp(brain: Brain) {
           }
           break;
         }
-        case "criar_lembrete":
-          resposta = "⏰ (em breve) vou guardar esse lembrete e te avisar na hora.";
+        case "criar_lembrete": {
+          const lembrete = await brain.extrairLembrete(texto, new Date());
+          if (!lembrete) {
+            resposta =
+              '⏰ entendi que é um lembrete, mas não peguei a hora. Tenta com um horário, tipo "amanhã às 9h".';
+            break;
+          }
+          // Guarda no banco COM o destino (esta conversa) pro agendador achar depois.
+          salvarLembrete(lembrete.texto, lembrete.quando, msg.key.remoteJid!);
+          const quando = new Intl.DateTimeFormat("pt-BR", {
+            timeZone: "America/Fortaleza",
+            dateStyle: "short",
+            timeStyle: "short",
+          }).format(new Date(lembrete.quando));
+          resposta = `⏰ combinado! vou te lembrar de "${lembrete.texto}" em ${quando}.`;
           break;
+        }
       }
 
       // 3. Responde na mesma conversa de onde veio, com o prefixo do robô.
