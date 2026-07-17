@@ -1,4 +1,8 @@
 // Jarbas 🤵 — ponto de entrada.
-// Fase 0: só provamos que o projeto TypeScript roda. O WhatsApp entra na próxima etapa.
+// Etapa 2: abrir a conexão com o WhatsApp (QR Code no terminal).
 
-console.log("🤵 Jarbas acordou. (Fase 0 — ainda sem WhatsApp)");
+import { conectarWhatsApp } from "./whatsapp.ts";
+
+console.log("🤵 Jarbas acordando...");
+
+await conectarWhatsApp();
