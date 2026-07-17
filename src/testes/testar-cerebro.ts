@@ -1,7 +1,7 @@
 // Teste isolado do cérebro — roda SEM precisar do WhatsApp conectado.
 // Uso: npm run testar:cerebro   (precisa da OPENAI_API_KEY no .env)
 
-import { OpenAIBrain } from "./brain.ts";
+import { OpenAIBrain } from "../brain.ts";
 
 const brain = new OpenAIBrain();
 

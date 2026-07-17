@@ -1,7 +1,7 @@
 // Teste isolado da extração de lembrete (Etapa 2 da skill criar_lembrete).
 // Usa o cérebro/LLM. Uso: npm run testar:lembrete
 
-import { OpenAIBrain } from "./brain.ts";
+import { OpenAIBrain } from "../brain.ts";
 
 const brain = new OpenAIBrain();
 const agora = new Date();

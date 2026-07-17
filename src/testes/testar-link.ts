@@ -1,7 +1,7 @@
 // Teste isolado da extração de texto de um link (Etapa 1 da skill resumir_link).
 // Não usa o cérebro/LLM — só baixa e mostra um trecho. Uso: npm run testar:link
 
-import { acharUrl, baixarTextoDoLink } from "./skills/resumir-link.ts";
+import { acharUrl, baixarTextoDoLink } from "../skills/resumir-link.ts";
 
 const mensagem = "resume isso pra mim: https://pt.wikipedia.org/wiki/WebSocket";
 
