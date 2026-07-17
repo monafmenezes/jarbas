@@ -6,14 +6,14 @@ import makeWASocket, {
   useMultiFileAuthState,
   fetchLatestBaileysVersion,
   jidNormalizedUser,
+  downloadMediaMessage,
   DisconnectReason,
 } from "@whiskeysockets/baileys";
 import { Boom } from "@hapi/boom";
 import qrcode from "qrcode-terminal";
 import pino from "pino";
 import type { Brain } from "./brain.ts";
-import { acharUrl, baixarTextoDoLink } from "./skills/resumir-link.ts";
-import { salvarLembrete } from "./db.ts";
+import { rotearTexto } from "./roteador.ts";
 
 // Referência viva do socket. Quando a conexão cai e reconecta, criamos um sock
 // NOVO — então quem envia mensagens de fora do fluxo (o agendador) não pode
@@ -65,7 +65,7 @@ export async function conectarWhatsApp(brain: Brain) {
     }
 
     if (connection === "open") {
-      console.log("✅ Jarbas conectado ao WhatsApp!");
+        console.log("✅ Jarbas conectado ao WhatsApp!");
     }
 
     if (connection === "close") {
@@ -108,61 +108,40 @@ export async function conectarWhatsApp(brain: Brain) {
       // ...e ser da conversa "Você" (remetente = você mesma).
       if (!souEu(msg.key.remoteJid)) continue;
 
-      // Pega o texto (cobre os dois formatos mais comuns de mensagem de texto).
-      const texto =
-        msg.message.conversation ?? msg.message.extendedTextMessage?.text;
+      // O "texto" pode vir de dois lugares: digitado, ou falado num áudio.
+      let texto: string | undefined;
+
+      if (msg.message.audioMessage) {
+        // É um áudio: baixa os bytes crus e manda pro Whisper transcrever.
+        try {
+          const bytes = await downloadMediaMessage(msg, "buffer", {});
+          texto = await brain.transcrever(bytes);
+        } catch (erro) {
+          // Áudio expirado, rede caiu... avisa em vez de derrubar o bot.
+          await sock.sendMessage(msg.key.remoteJid!, {
+            text: `🤵 🎤 não consegui transcrever: ${(erro as Error).message}`,
+          });
+          continue;
+        }
+      } else {
+        // Texto digitado (cobre os dois formatos mais comuns de mensagem).
+        texto =
+          msg.message.conversation ??
+          msg.message.extendedTextMessage?.text ??
+          undefined;
+      }
+
       if (!texto) continue;
 
       // ⚠️ Evita loop infinito: a resposta do bot também é "fromMe" e cairia
       // aqui de novo. Marcamos toda resposta com o prefixo 🤵 e ignoramos ele.
       if (texto.startsWith("🤵")) continue;
 
-      // 1. Pergunta ao cérebro O QUE a pessoa quer.
-      const intencao = await brain.classificarIntencao(texto);
-      console.log(`💬 "${texto}" → intenção: ${intencao}`);
+      // 1. Entrega o texto ao roteador: ele classifica a intenção e despacha
+      //    pra skill certa, devolvendo a resposta pronta.
+      const resposta = await rotearTexto(texto, brain, msg.key.remoteJid!);
 
-      // 2. Roteia pra skill certa. Cada destino monta a resposta.
-      let resposta: string;
-      switch (intencao) {
-        case "conversa":
-          // Papo livre já funciona de verdade (o "ChatGPT no zap").
-          resposta = await brain.conversar(texto);
-          break;
-        case "resumir_link": {
-          const url = acharUrl(texto);
-          if (!url) {
-            resposta = "🔗 não achei um link na mensagem. Me manda a URL!";
-            break;
-          }
-          try {
-            const conteudo = await baixarTextoDoLink(url);
-            resposta = "🔗 " + (await brain.resumir(conteudo));
-          } catch (erro) {
-            // Rede caiu, site fora do ar, timeout... avisa em vez de morrer.
-            resposta = `🔗 não consegui resumir: ${(erro as Error).message}`;
-          }
-          break;
-        }
-        case "criar_lembrete": {
-          const lembrete = await brain.extrairLembrete(texto, new Date());
-          if (!lembrete) {
-            resposta =
-              '⏰ entendi que é um lembrete, mas não peguei a hora. Tenta com um horário, tipo "amanhã às 9h".';
-            break;
-          }
-          // Guarda no banco COM o destino (esta conversa) pro agendador achar depois.
-          salvarLembrete(lembrete.texto, lembrete.quando, msg.key.remoteJid!);
-          const quando = new Intl.DateTimeFormat("pt-BR", {
-            timeZone: "America/Fortaleza",
-            dateStyle: "short",
-            timeStyle: "short",
-          }).format(new Date(lembrete.quando));
-          resposta = `⏰ combinado! vou te lembrar de "${lembrete.texto}" em ${quando}.`;
-          break;
-        }
-      }
-
-      // 3. Responde na mesma conversa de onde veio, com o prefixo do robô.
+      // 2. Responde na mesma conversa de onde veio, com o prefixo do robô.
       await sock.sendMessage(msg.key.remoteJid!, { text: `🤵 ${resposta}` });
     }
   });

@@ -3,7 +3,7 @@
 // direto. Trocar de provedor (OpenAI → Claude) vira: escrever outra classe que
 // implemente Brain e mudar UMA linha de montagem. Nada mais no projeto muda.
 
-import OpenAI from "openai";
+import OpenAI, { toFile } from "openai";
 
 // O que o usuário quer, decidido pelo cérebro a partir da mensagem dele.
 // É a lista de destinos que o roteador do WhatsApp vai saber atender.
@@ -25,6 +25,9 @@ export interface Brain {
   // Lê um pedido de lembrete e extrai O QUÊ lembrar e QUANDO (epoch em ms).
   // Devolve null se não der pra entender a hora. `agora` é a referência de tempo.
   extrairLembrete(texto: string, agora: Date): Promise<LembreteExtraido | null>;
+  // Recebe os bytes crus de um áudio (OGG/Opus, como o WhatsApp manda) e
+  // devolve o texto falado — transcrição de voz pra texto.
+  transcrever(audio: Uint8Array): Promise<string>;
 }
 
 // O que sai da extração de um lembrete: só o essencial (o banco cuida do resto).
@@ -179,5 +182,22 @@ export class OpenAIBrain implements Brain {
     if (Number.isNaN(quando)) return null;
 
     return { texto: dados.texto, quando };
+  }
+
+  async transcrever(audio: Uint8Array): Promise<string> {
+    // A API do Whisper espera um "arquivo", não bytes soltos. `toFile` embrulha
+    // os bytes num arquivo em memória (sem tocar no disco). O nome com extensão
+    // .ogg é o que diz ao Whisper o formato — é o que o WhatsApp manda.
+    const arquivo = await toFile(audio, "audio.ogg", { type: "audio/ogg" });
+
+    // language: "pt" ajuda o modelo a não errar palavra achando que é outro
+    // idioma. É a única tarefa que usa o Whisper (não o modelo de chat).
+    const resposta = await this.client.audio.transcriptions.create({
+      file: arquivo,
+      model: "whisper-1",
+      language: "pt",
+    });
+
+    return resposta.text.trim();
   }
 }
