@@ -26,6 +26,8 @@ console.log("🧭 Testando a classificação de intenção...\n");
 const exemplos = [
   "resume esse artigo pra mim: https://exemplo.com/post",
   "me lembra de pagar o boleto amanhã às 9h",
+  "gastei 30 no ifood", // → registrar_gasto (anota)
+  "quanto gastei hoje?", // → consultar_gastos (pergunta) — a distinção nova
   "qual é a capital da Austrália?",
 ];
 

@@ -4,6 +4,7 @@
 // implemente Brain e mudar UMA linha de montagem. Nada mais no projeto muda.
 
 import OpenAI, { toFile } from "openai";
+import { FUSO, OFFSET } from "./tempo.ts";
 
 // O que o usuário quer, decidido pelo cérebro a partir da mensagem dele.
 // É a lista de destinos que o roteador do WhatsApp vai saber atender.
@@ -11,6 +12,7 @@ export type Intencao =
   | "resumir_link" // mandou um link / pediu pra resumir algo
   | "criar_lembrete" // quer ser lembrado de algo no futuro
   | "registrar_gasto" // está anotando um gasto ("gastei 45 no mercado")
+  | "consultar_gastos" // quer SABER quanto/no que gastou ("quanto gastei hoje?")
   | "conversa"; // qualquer outra coisa: papo livre, pergunta, dúvida
 
 // ─── O CONTRATO ──────────────────────────────────────────────────────────────
@@ -63,11 +65,6 @@ export const CATEGORIAS = [
   "compras",
   "outros",
 ] as const;
-
-// Fuso da Monalisa (João Pessoa/PB): UTC-3, e o Brasil não tem mais horário de
-// verão, então o offset é fixo. Por isso podemos carimbar "-03:00" com segurança.
-const FUSO = "America/Fortaleza";
-const OFFSET = "-03:00";
 
 // Modelo padrão das chamadas. gpt-4o-mini é barato e mais que suficiente pra
 // resumo e classificação de intenção. Se um dia uma tarefa exigir mais (ex.:
@@ -130,6 +127,9 @@ export class OpenAIBrain implements Brain {
             '- "registrar_gasto": a pessoa está anotando um gasto/compra que JÁ ' +
             'aconteceu, com um valor em dinheiro (ex.: "gastei 45 no mercado", ' +
             '"paguei 12 de uber", "almoço 32 reais").\n' +
+            '- "consultar_gastos": a pessoa quer SABER quanto ou no que já gastou, ' +
+            'SEM informar um valor novo (ex.: "quanto gastei hoje?", "meus gastos de ' +
+            'hoje", "quanto já torrei hoje").\n' +
             '- "conversa": qualquer outra coisa (pergunta, papo, dúvida geral).',
         },
         { role: "user", content: texto },
@@ -144,6 +144,7 @@ export class OpenAIBrain implements Brain {
       "resumir_link",
       "criar_lembrete",
       "registrar_gasto",
+      "consultar_gastos",
       "conversa",
     ] as const;
     const intencao: unknown = JSON.parse(bruto)?.intencao;

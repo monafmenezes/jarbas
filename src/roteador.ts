@@ -6,6 +6,7 @@
 import type { Brain } from "./brain.ts";
 import { acharUrl, baixarTextoDoLink } from "./skills/resumir-link.ts";
 import { salvarLembrete, salvarGasto } from "./db.ts";
+import { extratoDeHoje } from "./skills/consultar-gastos.ts";
 
 // `destino` é o JID da conversa: precisamos dele pra guardar o lembrete e o
 // agendador saber pra onde mandar o aviso depois.
@@ -69,5 +70,9 @@ export async function rotearTexto(
         gasto.descricao !== gasto.categoria ? ` (${gasto.descricao})` : "";
       return `💰 anotado! ${valor} em ${gasto.categoria}${detalhe}.`;
     }
+
+    case "consultar_gastos":
+      // Só lê e resume o que já está no banco — sem cérebro, sem efeito colateral.
+      return extratoDeHoje(destino);
   }
 }

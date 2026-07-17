@@ -11,6 +11,7 @@ const destino = "teste@s.whatsapp.net";
 const frases = [
   "gastei 45,90 no mercado", // → registrar_gasto
   "paguei 12 de uber pro trabalho", // → registrar_gasto
+  "quanto gastei hoje?", // → consultar_gastos (o extrato do dia)
   "me lembra de pagar o boleto amanhã às 9h", // → criar_lembrete (não regrediu)
   "qual a capital da França?", // → conversa (não virou gasto)
 ];
