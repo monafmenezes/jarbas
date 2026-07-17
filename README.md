@@ -42,7 +42,8 @@ módulo, não um bot inteiro.
 - **[Baileys](https://github.com/WhiskeySockets/Baileys)** — WhatsApp (não-oficial), num número dedicado
 - **`node:sqlite`** nativo (Node 22.5+) — sem build nativo
 - **cron** — lembretes e relatórios
-- **API da Claude** (multimodal) — resumo, intenção e visão
+- **OpenAI** (`gpt-4o` + Whisper) — resumo, intenção, transcrição de áudio e visão
+  _(atrás de uma interface — trocável por outro provedor sem mexer no resto)_
 
 ## Rodar
 
