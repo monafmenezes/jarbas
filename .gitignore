@@ -1,0 +1,14 @@
+node_modules/
+dist/
+
+# segredos e configuração local
+.env
+
+# sessão de autenticação do WhatsApp (Baileys) — NUNCA versionar
+auth/
+
+# banco de dados local
+data/
+
+# logs
+*.log
