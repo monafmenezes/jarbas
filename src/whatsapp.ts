@@ -12,6 +12,7 @@ import { Boom } from "@hapi/boom";
 import qrcode from "qrcode-terminal";
 import pino from "pino";
 import type { Brain } from "./brain.ts";
+import { acharUrl, baixarTextoDoLink } from "./skills/resumir-link.ts";
 
 // Recebe o "cérebro" de fora (injeção de dependência): a conexão não sabe se é
 // OpenAI ou Claude, só conhece o contrato Brain. Trocar de provedor não toca aqui.
@@ -111,9 +112,21 @@ export async function conectarWhatsApp(brain: Brain) {
           // Papo livre já funciona de verdade (o "ChatGPT no zap").
           resposta = await brain.conversar(texto);
           break;
-        case "resumir_link":
-          resposta = "🔗 (em breve) vou baixar e resumir esse link pra você.";
+        case "resumir_link": {
+          const url = acharUrl(texto);
+          if (!url) {
+            resposta = "🔗 não achei um link na mensagem. Me manda a URL!";
+            break;
+          }
+          try {
+            const conteudo = await baixarTextoDoLink(url);
+            resposta = "🔗 " + (await brain.resumir(conteudo));
+          } catch (erro) {
+            // Rede caiu, site fora do ar, timeout... avisa em vez de morrer.
+            resposta = `🔗 não consegui resumir: ${(erro as Error).message}`;
+          }
           break;
+        }
         case "criar_lembrete":
           resposta = "⏰ (em breve) vou guardar esse lembrete e te avisar na hora.";
           break;
