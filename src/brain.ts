@@ -10,6 +10,7 @@ import OpenAI, { toFile } from "openai";
 export type Intencao =
   | "resumir_link" // mandou um link / pediu pra resumir algo
   | "criar_lembrete" // quer ser lembrado de algo no futuro
+  | "registrar_gasto" // está anotando um gasto ("gastei 45 no mercado")
   | "conversa"; // qualquer outra coisa: papo livre, pergunta, dúvida
 
 // ─── O CONTRATO ──────────────────────────────────────────────────────────────
@@ -25,6 +26,9 @@ export interface Brain {
   // Lê um pedido de lembrete e extrai O QUÊ lembrar e QUANDO (epoch em ms).
   // Devolve null se não der pra entender a hora. `agora` é a referência de tempo.
   extrairLembrete(texto: string, agora: Date): Promise<LembreteExtraido | null>;
+  // Lê um registro de gasto ("gastei 45,90 no mercado") e extrai quanto, em que
+  // categoria e a descrição. Devolve null se não der pra achar um valor.
+  extrairGasto(texto: string): Promise<GastoExtraido | null>;
   // Recebe os bytes crus de um áudio (OGG/Opus, como o WhatsApp manda) e
   // devolve o texto falado — transcrição de voz pra texto.
   transcrever(audio: Uint8Array): Promise<string>;
@@ -35,6 +39,30 @@ export interface LembreteExtraido {
   texto: string; // o que lembrar, já limpo (sem "me lembra de")
   quando: number; // epoch em ms (UTC) — o instante de disparar
 }
+
+// O que sai da extração de um gasto. `centavos` já vem inteiro (o cérebro
+// raciocina em reais, mas a gente converte na saída pra manter a regra do banco:
+// dinheiro sempre em centavos). Ver a interface Gasto em db.ts.
+export interface GastoExtraido {
+  centavos: number; // R$ 45,90 -> 4590
+  categoria: string; // uma das CATEGORIAS abaixo
+  descricao: string; // o texto do que foi comprado ("mercado", "uber")
+}
+
+// Lista fechada de categorias. Manter fixa faz o relatório somar direito (sem
+// "mercado" e "supermercado" virando dois baldes diferentes). O cérebro é
+// instruído a escolher SEMPRE uma destas — na dúvida, "outros".
+export const CATEGORIAS = [
+  "mercado",
+  "alimentação",
+  "transporte",
+  "moradia",
+  "contas",
+  "saúde",
+  "lazer",
+  "compras",
+  "outros",
+] as const;
 
 // Fuso da Monalisa (João Pessoa/PB): UTC-3, e o Brasil não tem mais horário de
 // verão, então o offset é fixo. Por isso podemos carimbar "-03:00" com segurança.
@@ -99,6 +127,9 @@ export class OpenAIBrain implements Brain {
             "intencao é EXATAMENTE uma destas opções:\n" +
             '- "resumir_link": a mensagem tem um link ou pede pra resumir algo.\n' +
             '- "criar_lembrete": a pessoa quer ser lembrada de algo no futuro.\n' +
+            '- "registrar_gasto": a pessoa está anotando um gasto/compra que JÁ ' +
+            'aconteceu, com um valor em dinheiro (ex.: "gastei 45 no mercado", ' +
+            '"paguei 12 de uber", "almoço 32 reais").\n' +
             '- "conversa": qualquer outra coisa (pergunta, papo, dúvida geral).',
         },
         { role: "user", content: texto },
@@ -109,7 +140,12 @@ export class OpenAIBrain implements Brain {
 
     // O LLM não é 100% confiável: pode devolver algo fora da lista. Então a
     // gente valida e, na dúvida, cai no destino seguro ("conversa").
-    const opcoes = ["resumir_link", "criar_lembrete", "conversa"] as const;
+    const opcoes = [
+      "resumir_link",
+      "criar_lembrete",
+      "registrar_gasto",
+      "conversa",
+    ] as const;
     const intencao: unknown = JSON.parse(bruto)?.intencao;
     return (opcoes as readonly unknown[]).includes(intencao)
       ? (intencao as Intencao)
@@ -160,7 +196,8 @@ export class OpenAIBrain implements Brain {
             `- texto: o que lembrar, curto e sem "me lembra de" (ex.: "pagar o boleto").\n` +
             `- quando: a data e hora LOCAL do disparo no formato "AAAA-MM-DDTHH:MM", ` +
             `calculada a partir de "agora".\n` +
-            `REGRA IMPORTANTE: se a mensagem NÃO indicar um horário, dia ou prazo, ` +
+            `REGRA IMPORTANTE: se a mensagem NÃO indicar um h
+            orário, dia ou prazo, ` +
             `"quando" DEVE ser null. Nunca use o horário atual como padrão nem invente uma hora.\n` +
             `Exemplos:\n` +
             `"me lembra de comprar pão" -> {"texto":"comprar pão","quando":null}\n` +
@@ -182,6 +219,66 @@ export class OpenAIBrain implements Brain {
     if (Number.isNaN(quando)) return null;
 
     return { texto: dados.texto, quando };
+  }
+
+  async extrairGasto(texto: string): Promise<GastoExtraido | null> {
+    const resposta = await this.client.chat.completions.create({
+      model: MODELO,
+      response_format: { type: "json_object" },
+      messages: [
+        {
+          role: "system",
+          content:
+            `Você extrai gastos de mensagens de um app financeiro. Responda ` +
+            `APENAS um JSON no formato {"valor": ..., "categoria": "...", "descricao": "..."} onde:\n` +
+            `- valor: o valor em REAIS como número (use ponto decimal). Ex.: "45,90" -> 45.9.\n` +
+            `- categoria: EXATAMENTE uma destas: ${CATEGORIAS.join(", ")}.\n` +
+            `- descricao: o que foi comprado, curto (ex.: "mercado", "uber pro trabalho").\n` +
+            `COMO ESCOLHER A CATEGORIA (use "outros" só quando NENHUMA encaixar):\n` +
+            `- comida, bebida, doce, lanche, refeição fora, ifood, restaurante -> "alimentação"\n` +
+            `- compras de supermercado/feira em geral -> "mercado"\n` +
+            `- uber, ônibus, gasolina, passagem -> "transporte"\n` +
+            `- aluguel, luz, água, internet, telefone -> "contas" ou "moradia"\n` +
+            `- remédio, farmácia, consulta -> "saúde"\n` +
+            `- cinema, bar, show, jogo, streaming -> "lazer"\n` +
+            `- roupa, eletrônico, presente -> "compras"\n` +
+            `REGRA IMPORTANTE: se a mensagem NÃO tiver um valor em dinheiro, "valor" DEVE ser null.\n` +
+            `Exemplos:\n` +
+            `"gastei 45,90 no mercado" -> {"valor":45.9,"categoria":"mercado","descricao":"mercado"}\n` +
+            `"paguei 12 de uber pro trabalho" -> {"valor":12,"categoria":"transporte","descricao":"uber pro trabalho"}\n` +
+            `"2 reais de chocolate" -> {"valor":2,"categoria":"alimentação","descricao":"chocolate"}\n` +
+            `"que dia é hoje" -> {"valor":null,"categoria":"outros","descricao":""}`,
+        },
+        { role: "user", content: texto },
+      ],
+    });
+
+    const bruto = resposta.choices[0]?.message.content ?? "{}";
+    const dados = JSON.parse(bruto) as {
+      valor?: unknown;
+      categoria?: unknown;
+      descricao?: unknown;
+    };
+
+    // Sem valor numérico (ou zero/negativo), não é um gasto que dê pra registrar.
+    if (typeof dados.valor !== "number" || !(dados.valor > 0)) return null;
+
+    // A conta acontece AQUI, no código: reais -> centavos inteiros. Math.round
+    // evita o lixo de float (45.9 * 100 daria 4589.999... sem o round).
+    const centavos = Math.round(dados.valor * 100);
+
+    // O modelo pode escorregar e mandar categoria fora da lista: validamos e,
+    // na dúvida, caímos em "outros" — o relatório nunca fica com balde estranho.
+    const categoria = (CATEGORIAS as readonly unknown[]).includes(dados.categoria)
+      ? (dados.categoria as string)
+      : "outros";
+
+    const descricao =
+      typeof dados.descricao === "string" && dados.descricao.trim()
+        ? dados.descricao.trim()
+        : categoria; // se vier vazia, a própria categoria já descreve
+
+    return { centavos, categoria, descricao };
   }
 
   async transcrever(audio: Uint8Array): Promise<string> {

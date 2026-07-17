@@ -5,7 +5,7 @@
 
 import type { Brain } from "./brain.ts";
 import { acharUrl, baixarTextoDoLink } from "./skills/resumir-link.ts";
-import { salvarLembrete } from "./db.ts";
+import { salvarLembrete, salvarGasto } from "./db.ts";
 
 // `destino` é o JID da conversa: precisamos dele pra guardar o lembrete e o
 // agendador saber pra onde mandar o aviso depois.
@@ -49,6 +49,25 @@ export async function rotearTexto(
         timeStyle: "short",
       }).format(new Date(lembrete.quando));
       return `⏰ combinado! vou te lembrar de "${lembrete.texto}" em ${quando}.`;
+    }
+
+    case "registrar_gasto": {
+      const gasto = await brain.extrairGasto(texto);
+      if (!gasto) {
+        return "💰 entendi que é um gasto, mas não peguei o valor. Tenta assim: \"gastei 45 no mercado\".";
+      }
+      // Guarda o gasto nesta conversa (destino) pro relatório semanal achar depois.
+      salvarGasto(gasto.centavos, gasto.categoria, gasto.descricao, destino);
+      // Centavos -> reais só AQUI, na hora de mostrar (o banco continua inteiro).
+      const valor = new Intl.NumberFormat("pt-BR", {
+        style: "currency",
+        currency: "BRL",
+      }).format(gasto.centavos / 100);
+      // Só mostra a descrição quando ela acrescenta algo além da categoria
+      // (evita o redundante "R$ 45,90 em mercado (mercado)").
+      const detalhe =
+        gasto.descricao !== gasto.categoria ? ` (${gasto.descricao})` : "";
+      return `💰 anotado! ${valor} em ${gasto.categoria}${detalhe}.`;
     }
   }
 }
