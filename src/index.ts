@@ -1,8 +1,11 @@
 // Jarbas 🤵 — ponto de entrada.
-// Etapa 2: abrir a conexão com o WhatsApp (QR Code no terminal).
+// Aqui a gente MONTA as peças: cria o cérebro e o entrega à conexão do WhatsApp.
+// É o único lugar que decide QUAL cérebro usar — trocar de provedor é só aqui.
 
 import { conectarWhatsApp } from "./whatsapp.ts";
+import { OpenAIBrain } from "./brain.ts";
 
 console.log("🤵 Jarbas acordando...");
 
-await conectarWhatsApp();
+const brain = new OpenAIBrain();
+await conectarWhatsApp(brain);

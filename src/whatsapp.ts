@@ -11,8 +11,11 @@ import makeWASocket, {
 import { Boom } from "@hapi/boom";
 import qrcode from "qrcode-terminal";
 import pino from "pino";
+import type { Brain } from "./brain.ts";
 
-export async function conectarWhatsApp() {
+// Recebe o "cérebro" de fora (injeção de dependência): a conexão não sabe se é
+// OpenAI ou Claude, só conhece o contrato Brain. Trocar de provedor não toca aqui.
+export async function conectarWhatsApp(brain: Brain) {
   // 1. Estado de autenticação (credenciais da sessão) guardado na pasta ./auth.
   //    Na primeira vez a pasta vem vazia, então o WhatsApp vai pedir o QR Code.
   const { state, saveCreds } = await useMultiFileAuthState("auth");
@@ -62,7 +65,7 @@ export async function conectarWhatsApp() {
         // Qualquer outra queda (inclusive o 515 logo após o 1º pareamento):
         // o certo é reabrir a conexão.
         console.log("🔄 Conexão caiu, reconectando...");
-        conectarWhatsApp();
+        conectarWhatsApp(brain);
       }
     }
   });
@@ -93,12 +96,31 @@ export async function conectarWhatsApp() {
         msg.message.conversation ?? msg.message.extendedTextMessage?.text;
       if (!texto) continue;
 
-      // ⚠️ Evita loop infinito: o próprio eco do bot também é "fromMe" e cairia
-      // aqui de novo. Ignoramos o que já começa com o prefixo do robô.
-      if (texto.startsWith("🔁")) continue;
+      // ⚠️ Evita loop infinito: a resposta do bot também é "fromMe" e cairia
+      // aqui de novo. Marcamos toda resposta com o prefixo 🤵 e ignoramos ele.
+      if (texto.startsWith("🤵")) continue;
 
-      // Eco de teste: responde na mesma conversa de onde veio.
-      await sock.sendMessage(msg.key.remoteJid!, { text: `🔁 você disse: ${texto}` });
+      // 1. Pergunta ao cérebro O QUE a pessoa quer.
+      const intencao = await brain.classificarIntencao(texto);
+      console.log(`💬 "${texto}" → intenção: ${intencao}`);
+
+      // 2. Roteia pra skill certa. Cada destino monta a resposta.
+      let resposta: string;
+      switch (intencao) {
+        case "conversa":
+          // Papo livre já funciona de verdade (o "ChatGPT no zap").
+          resposta = await brain.conversar(texto);
+          break;
+        case "resumir_link":
+          resposta = "🔗 (em breve) vou baixar e resumir esse link pra você.";
+          break;
+        case "criar_lembrete":
+          resposta = "⏰ (em breve) vou guardar esse lembrete e te avisar na hora.";
+          break;
+      }
+
+      // 3. Responde na mesma conversa de onde veio, com o prefixo do robô.
+      await sock.sendMessage(msg.key.remoteJid!, { text: `🤵 ${resposta}` });
     }
   });
 
