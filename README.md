@@ -26,8 +26,11 @@ módulo, não um bot inteiro.
                     │
       ┌─────────────┼──────────────┐
       ▼             ▼              ▼
- 📝 Assistente  💰 Financeiro   🍽️ Calorias
+ 📝 Assistente  💰 Financeiro   🍽️ Calorias   … ＋ novas skills
 ```
+
+Cada skill é um módulo plugável — 💬 pergunta livre, 🧠 segundo cérebro, 🙏 devocional,
+🌱 bem-estar, 🏃 corrida, 🌸 ciclo menstrual, 📅 agenda… é só ir adicionando (veja o roadmap).
 
 ## Roadmap
 
@@ -35,6 +38,13 @@ módulo, não um bot inteiro.
 - [ ] **Fase 1 — 📝 Assistente** · salvar/resumir link, transcrever áudio, criar lembrete
 - [ ] **Fase 2 — 💰 Financeiro** · "gastei 45 no mercado" → categoriza, guarda e manda relatório semanal
 - [ ] **Fase 3 — 🍽️ Calorias** · foto da refeição → estima o prato e as calorias
+- [ ] **Fase 4 — 💬 Pergunta livre** · qualquer dúvida respondida na hora, tipo um ChatGPT no zap
+- [ ] **Fase 5 — 🧠 Segundo cérebro** · "anota que…" e depois "o que eu falei sobre X?" (busca semântica)
+- [ ] **Fase 6 — 🙏 Devocional** · evangelho/liturgia do dia toda manhã, com uma reflexão curta
+- [ ] **Fase 7 — 🌱 Bem-estar** · check-in diário de humor/gratidão com tendências ao longo do tempo
+- [ ] **Fase 8 — 🏃 Companheira de corrida** · previsão do tempo pra treino e registro de corridas
+- [ ] **Fase 9 — 🌸 Ciclo menstrual** · registra o ciclo, prevê menstruação/período fértil e avisa
+- [ ] **Fase 10 — 📅 Agenda** · criar eventos por linguagem natural (Google Calendar)
 
 ## Stack
 
