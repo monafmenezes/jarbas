@@ -29,22 +29,47 @@ módulo, não um bot inteiro.
  📝 Assistente  💰 Financeiro   🍽️ Calorias   … ＋ novas skills
 ```
 
-Cada skill é um módulo plugável — 💬 pergunta livre, 🧠 segundo cérebro, 🙏 devocional,
-🌱 bem-estar, 🏃 corrida, 🌸 ciclo menstrual, 📅 agenda… é só ir adicionando (veja o roadmap).
+Cada skill é um módulo plugável — assistente, financeiro, calorias, devocional, bem-estar,
+corrida, estudo, ciclo menstrual e por aí vai. É só ir adicionando (veja o roadmap logo abaixo).
 
 ## Roadmap
+
+### Em construção (ordem de build)
 
 - [x] **Fase 0 — Setup** · esqueleto TypeScript rodando
 - [ ] **Fase 1 — 📝 Assistente** · salvar/resumir link, transcrever áudio, criar lembrete
 - [ ] **Fase 2 — 💰 Financeiro** · "gastei 45 no mercado" → categoriza, guarda e manda relatório semanal
 - [ ] **Fase 3 — 🍽️ Calorias** · foto da refeição → estima o prato e as calorias
-- [ ] **Fase 4 — 💬 Pergunta livre** · qualquer dúvida respondida na hora, tipo um ChatGPT no zap
-- [ ] **Fase 5 — 🧠 Segundo cérebro** · "anota que…" e depois "o que eu falei sobre X?" (busca semântica)
-- [ ] **Fase 6 — 🙏 Devocional** · evangelho/liturgia do dia toda manhã, com uma reflexão curta
-- [ ] **Fase 7 — 🌱 Bem-estar** · check-in diário de humor/gratidão com tendências ao longo do tempo
-- [ ] **Fase 8 — 🏃 Companheira de corrida** · previsão do tempo pra treino e registro de corridas
-- [ ] **Fase 9 — 🌸 Ciclo menstrual** · registra o ciclo, prevê menstruação/período fértil e avisa
-- [ ] **Fase 10 — 📅 Agenda** · criar eventos por linguagem natural (Google Calendar)
+
+### No radar (backlog de skills)
+
+**🤖 Assistente & produtividade**
+- [ ] 💬 **Pergunta livre** · qualquer dúvida respondida na hora, tipo um ChatGPT no zap
+- [ ] 🧠 **Segundo cérebro** · "anota que…" / "o que eu falei sobre X?" (busca semântica)
+- [ ] ⏱️ **Foco & estudo** · Pomodoro e registro de horas por matéria, meta semanal
+- [ ] 🃏 **Flashcards** · revisão espaçada (SM-2) — "me pergunta sobre X"
+- [ ] 🛒 **Lista de compras** · vai acumulando itens e monta a lista
+- [ ] 🎂 **Aniversários** · lembra de datas e até sugere a mensagem
+- [ ] 📅 **Agenda** · criar eventos por linguagem natural (Google Calendar)
+
+**❤️ Bem-estar & saúde**
+- [ ] 🌱 **Bem-estar** · check-in diário de humor/gratidão com tendências
+- [ ] 💊 **Medicação** · registra remédio e avisa na hora
+- [ ] 🌸 **Ciclo menstrual** · registra o ciclo, prevê menstruação/período fértil e avisa
+- [ ] 🏃 **Corrida** · previsão do tempo pra treino e registro de corridas
+- [ ] 🍳 **O que cozinhar** · "tenho ovo, tomate e arroz" → sugestões de receita
+
+**🙏 Fé**
+- [ ] 🙏 **Devocional** · evangelho/liturgia do dia toda manhã, com uma reflexão curta
+- [ ] 📿 **Terço & santo do dia** · lembrete de oração e sequência guiada do terço
+
+**🔗 Ponte com outros projetos & automação**
+- [ ] 🎯 **Preparação pra vaga** · cola a descrição → perguntas de entrevista, match com o currículo
+- [ ] 📦 **Rastreamento de encomenda** · código dos Correios → status, avisa quando mexer
+- [ ] 💱 **Cotação & alertas** · dólar, euro, cripto sob demanda ou com alerta de preço
+
+**✨ Extras**
+- [ ] 🔊 **Resposta em áudio (TTS)** · o Jarbas responde falando, não só escrevendo
 
 ## Stack
 
