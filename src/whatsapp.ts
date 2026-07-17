@@ -5,6 +5,7 @@
 import makeWASocket, {
   useMultiFileAuthState,
   fetchLatestBaileysVersion,
+  jidNormalizedUser,
   DisconnectReason,
 } from "@whiskeysockets/baileys";
 import { Boom } from "@hapi/boom";
@@ -63,6 +64,41 @@ export async function conectarWhatsApp() {
         console.log("🔄 Conexão caiu, reconectando...");
         conectarWhatsApp();
       }
+    }
+  });
+
+  // 6. Escuta mensagens recebidas — mas só reage ao SEU self-chat (você -> você).
+  //    É a decisão de segurança do projeto: usando o número pessoal, o bot ignora
+  //    conversas com terceiros e só obedece você mesma.
+  sock.ev.on("messages.upsert", async ({ messages, type }) => {
+    // "notify" = mensagem nova de verdade (ignora sincronização de histórico etc.).
+    if (type !== "notify") return;
+
+    // Você tem DUAS identidades: o número normal e o LID (identificador que o
+    // WhatsApp usa por privacidade). O self-chat pode chegar por qualquer uma,
+    // então reconhecemos as duas como "você".
+    const meuJid = jidNormalizedUser(sock.user!.id);
+    const meuLid = sock.user!.lid ? jidNormalizedUser(sock.user!.lid) : undefined;
+    const souEu = (jid?: string | null) =>
+      jid === meuJid || (meuLid !== undefined && jid === meuLid);
+
+    for (const msg of messages) {
+      // Precisa ter conteúdo, ter sido enviada por você (fromMe)...
+      if (!msg.message || !msg.key.fromMe) continue;
+      // ...e ser da conversa "Você" (remetente = você mesma).
+      if (!souEu(msg.key.remoteJid)) continue;
+
+      // Pega o texto (cobre os dois formatos mais comuns de mensagem de texto).
+      const texto =
+        msg.message.conversation ?? msg.message.extendedTextMessage?.text;
+      if (!texto) continue;
+
+      // ⚠️ Evita loop infinito: o próprio eco do bot também é "fromMe" e cairia
+      // aqui de novo. Ignoramos o que já começa com o prefixo do robô.
+      if (texto.startsWith("🔁")) continue;
+
+      // Eco de teste: responde na mesma conversa de onde veio.
+      await sock.sendMessage(msg.key.remoteJid!, { text: `🔁 você disse: ${texto}` });
     }
   });
 
