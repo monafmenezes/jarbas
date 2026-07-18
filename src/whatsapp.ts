@@ -15,6 +15,26 @@ import pino from "pino";
 import type { Brain } from "./brain.ts";
 import { rotearTexto } from "./roteador.ts";
 
+// Lista de contatos que podem falar com o Jarbas (você + quem você liberar).
+// Vem do .env: CONTATOS_AUTORIZADOS com os números (DDI+DDD, só dígitos),
+// separados por vírgula. Guardamos só os dígitos pra comparação.
+const AUTORIZADOS = new Set(
+  (process.env.CONTATOS_AUTORIZADOS ?? "")
+    .split(",")
+    .map((n) => n.replace(/\D/g, ""))
+    .filter((n) => n.length > 0),
+);
+
+// Quem mandou está autorizado? O identificador pode chegar como telefone
+// (5585...@s.whatsapp.net) ou como LID (137...@lid, anônimo por privacidade).
+// Comparamos os dígitos da parte antes do @; se o WhatsApp entregar como LID,
+// basta adicionar esse número anônimo ao .env também.
+function ehAutorizado(jid?: string | null): boolean {
+  if (!jid) return false;
+  const id = jidNormalizedUser(jid).split("@")[0]?.replace(/\D/g, "") ?? "";
+  return AUTORIZADOS.has(id);
+}
+
 // Referência viva do socket. Quando a conexão cai e reconecta, criamos um sock
 // NOVO — então quem envia mensagens de fora do fluxo (o agendador) não pode
 // guardar um sock fixo; consulta esta variável, que apontamos pro sock atual.
@@ -87,26 +107,25 @@ export async function conectarWhatsApp(brain: Brain) {
     }
   });
 
-  // 6. Escuta mensagens recebidas — mas só reage ao SEU self-chat (você -> você).
-  //    É a decisão de segurança do projeto: usando o número pessoal, o bot ignora
-  //    conversas com terceiros e só obedece você mesma.
+  // 6. Escuta mensagens recebidas — só reage a contatos da allowlist (você + quem
+  //    você liberar no .env). Usando um número DEDICADO, as mensagens de vocês
+  //    chegam com fromMe=false; o único fromMe=true é a resposta do próprio bot.
   sock.ev.on("messages.upsert", async ({ messages, type }) => {
     // "notify" = mensagem nova de verdade (ignora sincronização de histórico etc.).
     if (type !== "notify") return;
 
-    // Você tem DUAS identidades: o número normal e o LID (identificador que o
-    // WhatsApp usa por privacidade). O self-chat pode chegar por qualquer uma,
-    // então reconhecemos as duas como "você".
-    const meuJid = jidNormalizedUser(sock.user!.id);
-    const meuLid = sock.user!.lid ? jidNormalizedUser(sock.user!.lid) : undefined;
-    const souEu = (jid?: string | null) =>
-      jid === meuJid || (meuLid !== undefined && jid === meuLid);
-
     for (const msg of messages) {
-      // Precisa ter conteúdo, ter sido enviada por você (fromMe)...
-      if (!msg.message || !msg.key.fromMe) continue;
-      // ...e ser da conversa "Você" (remetente = você mesma).
-      if (!souEu(msg.key.remoteJid)) continue;
+      // Precisa ter conteúdo e NÃO ser a resposta do próprio Jarbas (fromMe).
+      // Esse continue no fromMe é o anti-loop: barra tudo que o bot mesmo mandou.
+      if (!msg.message || msg.key.fromMe) continue;
+
+      // Só responde a quem está autorizado no .env.
+      if (!ehAutorizado(msg.key.remoteJid)) {
+        // Ajuda no primeiro setup: mostra o JID que chegou pra você colocar no
+        // .env (útil pra saber se o contato vem como número ou como LID).
+        console.log(`🚫 mensagem de contato não autorizado: ${msg.key.remoteJid}`);
+        continue;
+      }
 
       // O "texto" pode vir de dois lugares: digitado, ou falado num áudio.
       let texto: string | undefined;
@@ -132,10 +151,6 @@ export async function conectarWhatsApp(brain: Brain) {
       }
 
       if (!texto) continue;
-
-      // ⚠️ Evita loop infinito: a resposta do bot também é "fromMe" e cairia
-      // aqui de novo. Marcamos toda resposta com o prefixo 🤵 e ignoramos ele.
-      if (texto.startsWith("🤵")) continue;
 
       // 1. Entrega o texto ao roteador: ele classifica a intenção e despacha
       //    pra skill certa, devolvendo a resposta pronta.
