@@ -14,6 +14,7 @@ import qrcode from "qrcode-terminal";
 import pino from "pino";
 import type { Brain } from "./brain.ts";
 import { rotearTexto } from "./roteador.ts";
+import { estimarCaloriasDaFoto } from "./skills/estimar-calorias.ts";
 
 // Lista de contatos que podem falar com o Jarbas (você + quem você liberar).
 // Vem do .env: CONTATOS_AUTORIZADOS com os números (DDI+DDD, só dígitos),
@@ -125,6 +126,25 @@ export async function conectarWhatsApp(brain: Brain) {
         // .env (útil pra saber se o contato vem como número ou como LID).
         console.log(`🚫 mensagem de contato não autorizado: ${msg.key.remoteJid}`);
         continue;
+      }
+
+      // FOTO: caminho próprio, à parte do texto. Uma foto de refeição tem
+      // intenção óbvia (estimar calorias), então vai DIRETO pra skill — sem
+      // passar pelo roteador de intenção (mesma economia do atalho "tomei", que
+      // não gasta uma chamada de IA pra classificar o que já é claro).
+      if (msg.message.imageMessage) {
+        try {
+          // Mesmo downloadMediaMessage do áudio: ele baixa qualquer mídia.
+          const bytes = await downloadMediaMessage(msg, "buffer", {});
+          const resposta = await estimarCaloriasDaFoto(bytes, brain);
+          await sock.sendMessage(msg.key.remoteJid!, { text: `🤵 ${resposta}` });
+        } catch (erro) {
+          // Foto expirada, rede caiu... avisa em vez de derrubar o bot.
+          await sock.sendMessage(msg.key.remoteJid!, {
+            text: `🤵 🍽️ não consegui analisar a foto: ${(erro as Error).message}`,
+          });
+        }
+        continue; // já respondeu (ou avisou do erro): não segue pro fluxo de texto.
       }
 
       // O "texto" pode vir de dois lugares: digitado, ou falado num áudio.
