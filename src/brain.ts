@@ -20,8 +20,8 @@ export type Intencao =
   | "conversa"; // qualquer outra coisa: papo livre, pergunta, dúvida
 
 // ─── O CONTRATO ──────────────────────────────────────────────────────────────
-// O que o cérebro sabe fazer. Os demais métodos (transcrever, verFoto) entram
-// nas próximas fases.
+// O que o cérebro sabe fazer. Tudo que exige IA é um método aqui — as skills
+// conversam com este contrato, nunca com o provedor direto.
 export interface Brain {
   // Recebe um texto qualquer e devolve um resumo curto em português.
   resumir(texto: string): Promise<string>;
@@ -44,6 +44,10 @@ export interface Brain {
   // Recebe os bytes crus de um áudio (OGG/Opus, como o WhatsApp manda) e
   // devolve o texto falado — transcrição de voz pra texto.
   transcrever(audio: Uint8Array): Promise<string>;
+  // Recebe os bytes crus de uma FOTO (JPEG, como o WhatsApp manda) de uma
+  // refeição e estima o prato e as calorias. Devolve null se a imagem não
+  // parecer comida. É o único método que enxerga — usa VISÃO (sobe pro gpt-4o).
+  estimarRefeicao(imagem: Uint8Array): Promise<EstimativaRefeicao | null>;
 }
 
 // O que sai da extração de um lembrete: só o essencial (o banco cuida do resto).
@@ -65,6 +69,21 @@ export interface GastoExtraido {
 export interface RemedioExtraido {
   nome: string; // "anticoncepcional", "vitamina D"
   hora: string; // "HH:MM" local, ex.: "22:00"
+}
+
+// O que sai da estimativa de uma refeição por foto. As calorias são sempre uma
+// ESTIMATIVA (o modelo chuta pela aparência do prato) — a skill deixa isso
+// claro pra pessoa. Guardamos o total já somado + a quebra por item.
+export interface EstimativaRefeicao {
+  prato: string; // descrição curta do prato ("arroz, feijão e frango grelhado")
+  itens: ItemRefeicao[]; // cada componente identificado, com sua estimativa
+  calorias: number; // total estimado da refeição, em kcal
+}
+
+// Um componente do prato com a estimativa isolada dele.
+export interface ItemRefeicao {
+  nome: string; // "arroz branco", "feijão", "filé de frango"
+  calorias: number; // kcal estimadas SÓ desse item
 }
 
 // Lista fechada de categorias. Manter fixa faz o relatório somar direito (sem
@@ -388,5 +407,73 @@ export class OpenAIBrain implements Brain {
     });
 
     return resposta.text.trim();
+  }
+
+  async estimarRefeicao(imagem: Uint8Array): Promise<EstimativaRefeicao | null> {
+    // A API de visão não recebe bytes crus: a imagem viaja como "data URL" —
+    // uma string única que embute o formato + os bytes em base64. O WhatsApp
+    // manda foto em JPEG, então é esse o tipo que a gente anuncia aqui.
+    const base64 = Buffer.from(imagem).toString("base64");
+    const dataUrl = `data:image/jpeg;base64,${base64}`;
+
+    // ÚNICO método que enxerga: o gpt-4o-mini não dá conta de contar comida,
+    // então subimos pro gpt-4o SÓ aqui (mais caro, mas é uso pontual).
+    const resposta = await this.client.chat.completions.create({
+      model: "gpt-4o",
+      response_format: { type: "json_object" },
+      messages: [
+        {
+          role: "system",
+          content:
+            `Você é um nutricionista que estima calorias de refeições por foto. ` +
+            `Responda APENAS um JSON no formato ` +
+            `{"prato": "...", "itens": [{"nome": "...", "calorias": ...}], "calorias": ...} onde:\n` +
+            `- prato: descrição curta do que aparece (ex.: "arroz, feijão e frango grelhado").\n` +
+            `- itens: cada componente identificado, com as calorias estimadas SÓ dele (kcal, número inteiro).\n` +
+            `- calorias: o TOTAL estimado da refeição em kcal (a soma dos itens).\n` +
+            `Estime as porções pelo tamanho aparente no prato. É uma ESTIMATIVA — não precisa ser exato.\n` +
+            `REGRA IMPORTANTE: se a imagem NÃO for comida/refeição, devolva ` +
+            `{"prato": null, "itens": [], "calorias": null}.`,
+        },
+        {
+          // Numa mensagem de visão, o "content" deixa de ser uma string e passa
+          // a ser uma LISTA de partes: o texto do pedido + a imagem em si.
+          role: "user",
+          content: [
+            { type: "text", text: "Estime o prato e as calorias desta refeição:" },
+            { type: "image_url", image_url: { url: dataUrl } },
+          ],
+        },
+      ],
+    });
+
+    const bruto = resposta.choices[0]?.message.content ?? "{}";
+    const dados = JSON.parse(bruto) as {
+      prato?: unknown;
+      itens?: unknown;
+      calorias?: unknown;
+    };
+
+    // Não é comida (ou o modelo não leu): sem prato ou sem um total válido, desiste.
+    if (typeof dados.prato !== "string" || !dados.prato.trim()) return null;
+    if (typeof dados.calorias !== "number" || !(dados.calorias > 0)) return null;
+
+    // Blindamos a lista de itens: só entram os que têm nome E um número de kcal.
+    // O LLM pode escorregar num item faltando campo — o flatMap descarta o torto
+    // (retorna [] pra ele) e mantém os bons, sem quebrar o resto da resposta.
+    const itens: ItemRefeicao[] = Array.isArray(dados.itens)
+      ? dados.itens.flatMap((item) => {
+          const i = item as { nome?: unknown; calorias?: unknown };
+          if (typeof i.nome !== "string" || !i.nome.trim()) return [];
+          if (typeof i.calorias !== "number" || !(i.calorias >= 0)) return [];
+          return [{ nome: i.nome.trim(), calorias: Math.round(i.calorias) }];
+        })
+      : [];
+
+    return {
+      prato: dados.prato.trim(),
+      calorias: Math.round(dados.calorias),
+      itens,
+    };
   }
 }
