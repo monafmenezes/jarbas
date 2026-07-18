@@ -40,7 +40,7 @@ corrida, estudo, ciclo menstrual e por aí vai. É só ir adicionando (veja o ro
 - [x] **Fase 1 — 📝 Assistente** · salvar/resumir link, transcrever áudio, criar lembrete
 - [x] **Fase 2 — 💰 Financeiro** · "gastei 45 no mercado" → categoriza, guarda e manda relatório semanal
   - [x] listar os gastos do dia ("quanto gastei hoje?") · _corrigir um gasto lançado: despriorizado_
-- [ ] **Fase 3 — 🍽️ Calorias** · foto da refeição → estima o prato e as calorias
+- [x] **Fase 3 — 🍽️ Calorias** · foto da refeição → estima o prato e as calorias (visão do `gpt-4o`)
 
 ### No radar (backlog de skills)
 
