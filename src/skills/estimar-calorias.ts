@@ -4,20 +4,26 @@
 // a OpenAI direto) e devolve texto pronto — quem envia é o núcleo (whatsapp.ts).
 
 import type { Brain } from "../brain.ts";
+import { salvarRefeicao } from "../db.ts";
 
-// Recebe os bytes crus da foto + o cérebro (+ a legenda opcional que a pessoa
-// mandou junto, usada como dica pro modelo), e devolve a mensagem já formatada.
-// O null do cérebro (imagem que não parece comida) vira uma resposta gentil
-// aqui: a pessoa mandou uma foto, então merece um retorno — nunca silêncio.
+// Recebe os bytes crus da foto + o cérebro + o `destino` (a conversa, pra guardar
+// a refeição) e a legenda opcional (dica pro modelo). Estima, REGISTRA no banco e
+// devolve a mensagem já formatada. O null do cérebro (imagem que não parece
+// comida) vira uma resposta gentil: a pessoa mandou uma foto, merece um retorno.
 export async function estimarCaloriasDaFoto(
   imagem: Uint8Array,
   brain: Brain,
+  destino: string,
   legenda?: string,
 ): Promise<string> {
   const refeicao = await brain.estimarRefeicao(imagem, legenda);
   if (!refeicao) {
     return "🍽️ não reconheci uma refeição nessa foto. Manda uma foto do prato que eu estimo as calorias! 😋";
   }
+
+  // Registra a refeição nesta conversa (destino) — é o que o resumo diário do
+  // fim do dia vai somar. Só guardamos o que o cérebro reconheceu como comida.
+  salvarRefeicao(refeicao.prato, refeicao.calorias, destino);
 
   // Uma linha por item ("• arroz branco: ~240 kcal"). O "~" deixa explícito
   // pra pessoa que o número é ESTIMATIVA, não uma medida cravada.

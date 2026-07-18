@@ -17,7 +17,7 @@
     "testar:remedio": "JARBAS_DB=:memory: node --import tsx src/testes/testar-remedio.ts",
     "testar:verificar": "JARBAS_DB=:memory: node --import tsx src/testes/testar-verificar-remedios.ts",
     "testar:confirmar": "JARBAS_DB=:memory: node --import tsx src/testes/testar-confirmar-remedio.ts",
-    "testar:calorias": "node --env-file=.env --import tsx src/testes/testar-calorias.ts"
+    "testar:calorias": "JARBAS_DB=:memory: node --env-file=.env --import tsx src/testes/testar-calorias.ts"
   },
   "devDependencies": {
     "@types/node": "^22.10.2",

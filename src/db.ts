@@ -28,6 +28,18 @@ export interface Gasto {
   destino: string; // JID da conversa de onde veio (pra mandar o relatório)
 }
 
+// Como uma refeição estimada por foto fica guardada. `calorias` é INTEGER (kcal)
+// e é uma ESTIMATIVA do cérebro pela imagem. Guardamos o `prato` (o que o modelo
+// viu) pra poder listar no resumo do dia. Mesma ideia do gasto: cada registro
+// carrega o `destino` pro relatório diário achar depois.
+export interface Refeicao {
+  id: number;
+  prato: string; // "bolo de rolo", "arroz, feijão e frango grelhado"
+  calorias: number; // kcal estimadas (inteiro)
+  quando: number; // epoch em ms (UTC), igual aos gastos
+  destino: string; // JID da conversa de onde veio a foto
+}
+
 // Nos testes usamos ":memory:" (banco que só vive na RAM) pra não sujar o disco.
 const CAMINHO = process.env.JARBAS_DB ?? "data/jarbas.db";
 if (CAMINHO !== ":memory:") mkdirSync("data", { recursive: true });
@@ -54,6 +66,19 @@ db.exec(`
     descricao TEXT    NOT NULL,
     quando    INTEGER NOT NULL,
     destino   TEXT    NOT NULL
+  )
+`);
+
+// Tabela das refeições estimadas por foto. Estrutura enxuta, no espírito do
+// gasto: o que foi consumido (prato) + quanto (calorias) + quando + de qual
+// conversa. É o que o resumo diário vai somar no fim do dia.
+db.exec(`
+  CREATE TABLE IF NOT EXISTS refeicoes (
+    id       INTEGER PRIMARY KEY AUTOINCREMENT,
+    prato    TEXT    NOT NULL,
+    calorias INTEGER NOT NULL,
+    quando   INTEGER NOT NULL,
+    destino  TEXT    NOT NULL
   )
 `);
 
@@ -161,6 +186,25 @@ export function gastosPorCategoria(
     )
     .all(destino, desde);
   return linhas as unknown as ResumoCategoria[];
+}
+
+// ─── Calorias ────────────────────────────────────────────────────────────────
+
+// Guarda uma refeição estimada e devolve o id gerado. Como no gasto, `quando` é
+// opcional (padrão = agora) — deixamos passar por fora pra facilitar os testes
+// (simular uma refeição de ontem, por exemplo).
+export function salvarRefeicao(
+  prato: string,
+  calorias: number,
+  destino: string,
+  quando: number = Date.now(),
+): number {
+  const r = db
+    .prepare(
+      "INSERT INTO refeicoes (prato, calorias, quando, destino) VALUES (?, ?, ?, ?)",
+    )
+    .run(prato, calorias, quando, destino);
+  return Number(r.lastInsertRowid);
 }
 
 // ─── Medicação ───────────────────────────────────────────────────────────────

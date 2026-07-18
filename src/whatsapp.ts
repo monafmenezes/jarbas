@@ -141,7 +141,12 @@ export async function conectarWhatsApp(brain: Brain) {
           console.log(
             `📷 foto recebida${legenda ? ` (legenda: "${legenda}")` : ""} → estimando calorias...`,
           );
-          const resposta = await estimarCaloriasDaFoto(bytes, brain, legenda);
+          const resposta = await estimarCaloriasDaFoto(
+            bytes,
+            brain,
+            msg.key.remoteJid!,
+            legenda,
+          );
           await sock.sendMessage(msg.key.remoteJid!, { text: `🤵 ${resposta}` });
         } catch (erro) {
           // Foto expirada, rede caiu... avisa em vez de derrubar o bot.

@@ -22,5 +22,5 @@ const brain = new OpenAIBrain();
 const bytes = readFileSync(caminho);
 
 console.log(`📷 analisando ${caminho}...\n`);
-const resposta = await estimarCaloriasDaFoto(bytes, brain);
+const resposta = await estimarCaloriasDaFoto(bytes, brain, "teste");
 console.log(resposta);
