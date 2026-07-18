@@ -5,14 +5,16 @@
 
 import type { Brain } from "../brain.ts";
 
-// Recebe os bytes crus da foto + o cérebro, e devolve a mensagem já formatada.
+// Recebe os bytes crus da foto + o cérebro (+ a legenda opcional que a pessoa
+// mandou junto, usada como dica pro modelo), e devolve a mensagem já formatada.
 // O null do cérebro (imagem que não parece comida) vira uma resposta gentil
 // aqui: a pessoa mandou uma foto, então merece um retorno — nunca silêncio.
 export async function estimarCaloriasDaFoto(
   imagem: Uint8Array,
   brain: Brain,
+  legenda?: string,
 ): Promise<string> {
-  const refeicao = await brain.estimarRefeicao(imagem);
+  const refeicao = await brain.estimarRefeicao(imagem, legenda);
   if (!refeicao) {
     return "🍽️ não reconheci uma refeição nessa foto. Manda uma foto do prato que eu estimo as calorias! 😋";
   }

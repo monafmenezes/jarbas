@@ -136,7 +136,12 @@ export async function conectarWhatsApp(brain: Brain) {
         try {
           // Mesmo downloadMediaMessage do áudio: ele baixa qualquer mídia.
           const bytes = await downloadMediaMessage(msg, "buffer", {});
-          const resposta = await estimarCaloriasDaFoto(bytes, brain);
+          // A legenda mandada junto da foto vira dica pro modelo (prato regional).
+          const legenda = msg.message.imageMessage.caption ?? undefined;
+          console.log(
+            `📷 foto recebida${legenda ? ` (legenda: "${legenda}")` : ""} → estimando calorias...`,
+          );
+          const resposta = await estimarCaloriasDaFoto(bytes, brain, legenda);
           await sock.sendMessage(msg.key.remoteJid!, { text: `🤵 ${resposta}` });
         } catch (erro) {
           // Foto expirada, rede caiu... avisa em vez de derrubar o bot.

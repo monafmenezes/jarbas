@@ -47,7 +47,13 @@ export interface Brain {
   // Recebe os bytes crus de uma FOTO (JPEG, como o WhatsApp manda) de uma
   // refeição e estima o prato e as calorias. Devolve null se a imagem não
   // parecer comida. É o único método que enxerga — usa VISÃO (sobe pro gpt-4o).
-  estimarRefeicao(imagem: Uint8Array): Promise<EstimativaRefeicao | null>;
+  // `contexto` (opcional) é uma dica em texto — tipicamente a legenda que a
+  // pessoa mandou junto da foto ("bolo de rolo") — pra ajudar o modelo a
+  // identificar pratos ambíguos ou regionais que ele erraria só pela imagem.
+  estimarRefeicao(
+    imagem: Uint8Array,
+    contexto?: string,
+  ): Promise<EstimativaRefeicao | null>;
 }
 
 // O que sai da extração de um lembrete: só o essencial (o banco cuida do resto).
@@ -409,12 +415,22 @@ export class OpenAIBrain implements Brain {
     return resposta.text.trim();
   }
 
-  async estimarRefeicao(imagem: Uint8Array): Promise<EstimativaRefeicao | null> {
+  async estimarRefeicao(
+    imagem: Uint8Array,
+    contexto?: string,
+  ): Promise<EstimativaRefeicao | null> {
     // A API de visão não recebe bytes crus: a imagem viaja como "data URL" —
     // uma string única que embute o formato + os bytes em base64. O WhatsApp
     // manda foto em JPEG, então é esse o tipo que a gente anuncia aqui.
     const base64 = Buffer.from(imagem).toString("base64");
     const dataUrl = `data:image/jpeg;base64,${base64}`;
+
+    // Se veio uma legenda junto da foto, ela entra como DICA no pedido — o mesmo
+    // modelo, com contexto, acerta prato regional/ambíguo que erraria às cegas.
+    const pedido = contexto?.trim()
+      ? `A pessoa escreveu junto da foto: "${contexto.trim()}". Use isso como ` +
+        `dica do que é o prato. Estime o prato e as calorias desta refeição:`
+      : "Estime o prato e as calorias desta refeição:";
 
     // ÚNICO método que enxerga: o gpt-4o-mini não dá conta de contar comida,
     // então subimos pro gpt-4o SÓ aqui (mais caro, mas é uso pontual).
@@ -425,13 +441,16 @@ export class OpenAIBrain implements Brain {
         {
           role: "system",
           content:
-            `Você é um nutricionista que estima calorias de refeições por foto. ` +
-            `Responda APENAS um JSON no formato ` +
+            `Você é um nutricionista brasileiro que estima calorias de refeições ` +
+            `por foto. Considere a culinária do Brasil, incluindo pratos e DOCES ` +
+            `REGIONAIS (ex.: bolo de rolo, cuscuz, tapioca, pão de queijo, ` +
+            `feijoada, açaí). Responda APENAS um JSON no formato ` +
             `{"prato": "...", "itens": [{"nome": "...", "calorias": ...}], "calorias": ...} onde:\n` +
             `- prato: descrição curta do que aparece (ex.: "arroz, feijão e frango grelhado").\n` +
             `- itens: cada componente identificado, com as calorias estimadas SÓ dele (kcal, número inteiro).\n` +
             `- calorias: o TOTAL estimado da refeição em kcal (a soma dos itens).\n` +
-            `Estime as porções pelo tamanho aparente no prato. É uma ESTIMATIVA — não precisa ser exato.\n` +
+            `Estime a porção pelo tamanho aparente no prato e NÃO subestime — ` +
+            `doces, massas e frituras são calóricos. É uma ESTIMATIVA, não precisa ser exato.\n` +
             `REGRA IMPORTANTE: se a imagem NÃO for comida/refeição, devolva ` +
             `{"prato": null, "itens": [], "calorias": null}.`,
         },
@@ -440,7 +459,7 @@ export class OpenAIBrain implements Brain {
           // a ser uma LISTA de partes: o texto do pedido + a imagem em si.
           role: "user",
           content: [
-            { type: "text", text: "Estime o prato e as calorias desta refeição:" },
+            { type: "text", text: pedido },
             { type: "image_url", image_url: { url: dataUrl } },
           ],
         },
