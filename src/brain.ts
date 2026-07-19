@@ -18,6 +18,8 @@ export type Intencao =
   | "listar_remedios" // quer VER a lista de remédios cadastrados
   | "consultar_remedios" // quer saber se JÁ TOMOU hoje ("já tomei o remédio?")
   | "consultar_calorias" // quer saber quanto já comeu hoje ("quantas calorias?")
+  | "anotar" // quer GUARDAR uma informação ("anota que o wifi novo é 12345")
+  | "consultar_memoria" // quer LEMBRAR algo que anotou ("qual a senha do wifi?")
   | "conversa"; // qualquer outra coisa: papo livre, pergunta, dúvida
 
 // ─── O CONTRATO ──────────────────────────────────────────────────────────────
@@ -45,6 +47,10 @@ export interface Brain {
   // Recebe os bytes crus de um áudio (OGG/Opus, como o WhatsApp manda) e
   // devolve o texto falado — transcrição de voz pra texto.
   transcrever(audio: Uint8Array): Promise<string>;
+  // Transforma um texto no seu EMBEDDING: o significado virado um vetor de ~1500
+  // números. Textos de sentido parecido geram vetores próximos. É o que permite a
+  // busca semântica do "segundo cérebro" (achar por significado, não por palavra).
+  gerarEmbedding(texto: string): Promise<number[]>;
   // Recebe os bytes crus de uma FOTO (JPEG, como o WhatsApp manda) de uma
   // refeição e estima o prato e as calorias. Devolve null se a imagem não
   // parecer comida. É o único método que enxerga — usa VISÃO (sobe pro gpt-4o).
@@ -112,6 +118,11 @@ export const CATEGORIAS = [
 // resumo e classificação de intenção. Se um dia uma tarefa exigir mais (ex.:
 // visão em foto de refeição), dá pra subir pra "gpt-4o" só naquele método.
 const MODELO = "gpt-4o-mini";
+
+// Modelo de EMBEDDING (transformar texto em vetor). É de uma família diferente
+// dos modelos de chat: não "conversa", só devolve o vetor do significado. O
+// "small" é barato e devolve 1536 números — de sobra pra busca de notas pessoais.
+const MODELO_EMBEDDING = "text-embedding-3-small";
 
 // ─── A IMPLEMENTAÇÃO (OpenAI) ────────────────────────────────────────────────
 export class OpenAIBrain implements Brain {
@@ -187,7 +198,17 @@ export class OpenAIBrain implements Brain {
             'consumiu hoje ou o que comeu, SEM mandar foto (ex.: "quantas calorias ' +
             'já comi hoje?", "quantas kcal hoje?", "o que eu comi hoje?", "meu ' +
             'total de calorias").\n' +
-            '- "conversa": qualquer outra coisa (pergunta, papo, dúvida geral).',
+            '- "anotar": a pessoa quer GUARDAR uma informação/fato pra lembrar ' +
+            'depois, SEM hora marcada (ex.: "anota que o wifi novo é 12345", "guarda ' +
+            'que o carro está na vaga 42", "lembra que a chave reserva fica com a ' +
+            'vizinha"). NÃO confunda com criar_lembrete: se tiver um horário/prazo ' +
+            'pra ser avisada, é criar_lembrete; sem horário, é anotar.\n' +
+            '- "consultar_memoria": a pessoa quer RECUPERAR algo que ela mesma ' +
+            'anotou antes (ex.: "qual a senha do wifi?", "onde guardei o carro?", "o ' +
+            'que eu falei sobre a chave reserva?", "com quem está a chave?"). É uma ' +
+            'pergunta sobre a vida/coisas DELA, não conhecimento geral.\n' +
+            '- "conversa": qualquer outra coisa — papo livre ou pergunta de ' +
+            'conhecimento GERAL (ex.: "qual a capital da França?", "me explica X").',
         },
         { role: "user", content: texto },
       ],
@@ -207,6 +228,8 @@ export class OpenAIBrain implements Brain {
       "listar_remedios",
       "consultar_remedios",
       "consultar_calorias",
+      "anotar",
+      "consultar_memoria",
       "conversa",
     ] as const;
     const intencao: unknown = JSON.parse(bruto)?.intencao;
@@ -419,6 +442,22 @@ export class OpenAIBrain implements Brain {
     });
 
     return resposta.text.trim();
+  }
+
+  async gerarEmbedding(texto: string): Promise<number[]> {
+    // Endpoint DIFERENTE do chat: `embeddings.create`. Ele não gera resposta em
+    // texto — devolve o vetor do significado. Mandamos um texto, pedimos um vetor.
+    const resposta = await this.client.embeddings.create({
+      model: MODELO_EMBEDDING,
+      input: texto,
+    });
+
+    // A API aceita vários textos de uma vez, então devolve uma LISTA de vetores
+    // (um `data[]`). Mandamos um só, então pegamos o primeiro. `.embedding` é o
+    // array de números em si — já pronto pra guardar no banco (Etapa 1).
+    const vetor = resposta.data[0]?.embedding;
+    if (!vetor) throw new Error("a API não devolveu um embedding.");
+    return vetor;
   }
 
   async estimarRefeicao(
