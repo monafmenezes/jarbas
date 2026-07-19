@@ -49,6 +49,20 @@ export interface RefeicaoResumo {
   calorias: number;
 }
 
+// Como uma nota do "segundo cérebro" fica guardada. Além do `texto` (o que a
+// pessoa mandou anotar), guardamos o `embedding`: o SIGNIFICADO da nota virado
+// uma lista de ~1500 números (um "vetor"). É esse vetor que deixa a busca achar
+// a nota por SENTIDO, não por palavra exata. O SQLite não tem tipo "lista de
+// número", então serializamos o vetor como TEXTO (JSON) — na volta, JSON.parse
+// devolve o array. `quando`/`destino` seguem a mesma ideia dos outros registros.
+export interface Nota {
+  id: number;
+  texto: string;
+  embedding: number[]; // o vetor do significado (já desserializado do JSON)
+  quando: number; // epoch em ms (UTC)
+  destino: string; // JID da conversa de onde veio
+}
+
 // Nos testes usamos ":memory:" (banco que só vive na RAM) pra não sujar o disco.
 const CAMINHO = process.env.JARBAS_DB ?? "data/jarbas.db";
 if (CAMINHO !== ":memory:") mkdirSync("data", { recursive: true });
@@ -88,6 +102,19 @@ db.exec(`
     calorias INTEGER NOT NULL,
     quando   INTEGER NOT NULL,
     destino  TEXT    NOT NULL
+  )
+`);
+
+// Tabela do "segundo cérebro": as notas que a pessoa manda guardar. `embedding`
+// é TEXT porque guardamos o vetor serializado como JSON (o SQLite não tem tipo
+// de lista). É o único registro que carrega um vetor — o resto é igual aos outros.
+db.exec(`
+  CREATE TABLE IF NOT EXISTS notas (
+    id        INTEGER PRIMARY KEY AUTOINCREMENT,
+    texto     TEXT    NOT NULL,
+    embedding TEXT    NOT NULL,
+    quando    INTEGER NOT NULL,
+    destino   TEXT    NOT NULL
   )
 `);
 
@@ -238,6 +265,47 @@ export function refeicoesDesde(destino: string, desde: number): RefeicaoResumo[]
     )
     .all(destino, desde);
   return linhas as unknown as RefeicaoResumo[];
+}
+
+// ─── Segundo cérebro (notas + busca semântica) ───────────────────────────────
+
+// Guarda uma nota e devolve o id gerado. O vetor entra SERIALIZADO como JSON
+// (JSON.stringify vira "[0.12,-0.03,...]") porque a coluna é TEXT — o SQLite não
+// guarda lista. `quando` é opcional (padrão = agora), no mesmo espírito dos outros
+// (deixa o teste simular uma nota antiga se precisar).
+export function salvarNota(
+  texto: string,
+  embedding: number[],
+  destino: string,
+  quando: number = Date.now(),
+): number {
+  const r = db
+    .prepare(
+      "INSERT INTO notas (texto, embedding, quando, destino) VALUES (?, ?, ?, ?)",
+    )
+    .run(texto, JSON.stringify(embedding), quando, destino);
+  return Number(r.lastInsertRowid);
+}
+
+// Todas as notas de UMA conversa. Traz o vetor de volta pra memória: o banco
+// guardou TEXTO (JSON), então aqui a gente JSON.parse pra virar `number[]` de
+// novo — é sobre esses vetores que a busca por significado vai comparar. Como o
+// SQLite não sabe medir "distância entre vetores", a conta acontece no JS (ver a
+// skill segundo-cerebro): puxamos as notas desta conversa e comparamos uma a uma.
+export function notasDe(destino: string): Nota[] {
+  const linhas = db
+    .prepare(
+      "SELECT id, texto, embedding, quando, destino FROM notas WHERE destino = ?",
+    )
+    .all(destino) as {
+    id: number;
+    texto: string;
+    embedding: string;
+    quando: number;
+    destino: string;
+  }[];
+  // Desserializa o vetor de cada linha (TEXT JSON -> number[]) na saída.
+  return linhas.map((l) => ({ ...l, embedding: JSON.parse(l.embedding) }));
 }
 
 // ─── Medicação ───────────────────────────────────────────────────────────────
