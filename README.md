@@ -47,7 +47,7 @@ corrida, estudo, ciclo menstrual e por aí vai. É só ir adicionando (veja o ro
 
 **🤖 Assistente & produtividade**
 - [x] 💬 **Pergunta livre** · qualquer dúvida respondida na hora, tipo um ChatGPT no zap
-- [ ] 🧠 **Segundo cérebro** · "anota que…" / "o que eu falei sobre X?" (busca semântica)
+- [x] 🧠 **Segundo cérebro** · "anota que…" / "o que eu falei sobre X?" (busca semântica com embeddings + cosseno)
 - [ ] ⏱️ **Foco & estudo** · Pomodoro e registro de horas por matéria, meta semanal
 - [ ] 🃏 **Flashcards** · revisão espaçada (SM-2) — "me pergunta sobre X"
 - [ ] 🛒 **Lista de compras** · vai acumulando itens e monta a lista
