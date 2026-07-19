@@ -40,6 +40,15 @@ export interface Refeicao {
   destino: string; // JID da conversa de onde veio a foto
 }
 
+// Uma linha do resumo diário: o prato e as kcal dele. É um SUBCONJUNTO da
+// Refeicao — o resumo só precisa do que mostrar (prato + calorias), não do id
+// nem do destino/quando (que já foram usados pra filtrar). Tipo enxuto = query
+// enxuta (SELECT só das duas colunas) e formatador que não vê o que não usa.
+export interface RefeicaoResumo {
+  prato: string;
+  calorias: number;
+}
+
 // Nos testes usamos ":memory:" (banco que só vive na RAM) pra não sujar o disco.
 const CAMINHO = process.env.JARBAS_DB ?? "data/jarbas.db";
 if (CAMINHO !== ":memory:") mkdirSync("data", { recursive: true });
@@ -205,6 +214,30 @@ export function salvarRefeicao(
     )
     .run(prato, calorias, quando, destino);
   return Number(r.lastInsertRowid);
+}
+
+// Quais conversas (destinos) registraram alguma refeição desde `desde` (epoch
+// ms). Gêmeo do destinosComGastos: o resumo diário manda um fechamento pra cada
+// uma — hoje só a self-chat dela, mas já funciona pra mais de uma conversa.
+export function destinosComRefeicoes(desde: number): string[] {
+  const linhas = db
+    .prepare("SELECT DISTINCT destino FROM refeicoes WHERE quando >= ?")
+    .all(desde) as { destino: string }[];
+  return linhas.map((l) => l.destino);
+}
+
+// As refeições de UMA conversa desde `desde`, em ordem de horário. Diferente do
+// gasto (que AGRUPA por categoria), aqui a gente LISTA cada prato — o resumo do
+// dia mostra "o que você comeu" item a item e soma o total. Traz só as colunas
+// que o formatador usa (prato, calorias): tipo enxuto, query enxuta.
+export function refeicoesDesde(destino: string, desde: number): RefeicaoResumo[] {
+  const linhas = db
+    .prepare(
+      "SELECT prato, calorias FROM refeicoes " +
+        "WHERE destino = ? AND quando >= ? ORDER BY quando",
+    )
+    .all(destino, desde);
+  return linhas as unknown as RefeicaoResumo[];
 }
 
 // ─── Medicação ───────────────────────────────────────────────────────────────
