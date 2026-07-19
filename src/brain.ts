@@ -17,6 +17,7 @@ export type Intencao =
   | "remover_remedio" // quer PARAR de ser lembrada de um remédio
   | "listar_remedios" // quer VER a lista de remédios cadastrados
   | "consultar_remedios" // quer saber se JÁ TOMOU hoje ("já tomei o remédio?")
+  | "consultar_calorias" // quer saber quanto já comeu hoje ("quantas calorias?")
   | "conversa"; // qualquer outra coisa: papo livre, pergunta, dúvida
 
 // ─── O CONTRATO ──────────────────────────────────────────────────────────────
@@ -182,6 +183,10 @@ export class OpenAIBrain implements Brain {
             '- "consultar_remedios": a pessoa quer saber se JÁ TOMOU o remédio hoje ' +
             'ou o que falta tomar (ex.: "já tomei o remédio hoje?", "tomei meus ' +
             'remédios?", "o que falta tomar hoje?").\n' +
+            '- "consultar_calorias": a pessoa quer SABER quantas calorias já ' +
+            'consumiu hoje ou o que comeu, SEM mandar foto (ex.: "quantas calorias ' +
+            'já comi hoje?", "quantas kcal hoje?", "o que eu comi hoje?", "meu ' +
+            'total de calorias").\n' +
             '- "conversa": qualquer outra coisa (pergunta, papo, dúvida geral).',
         },
         { role: "user", content: texto },
@@ -201,6 +206,7 @@ export class OpenAIBrain implements Brain {
       "remover_remedio",
       "listar_remedios",
       "consultar_remedios",
+      "consultar_calorias",
       "conversa",
     ] as const;
     const intencao: unknown = JSON.parse(bruto)?.intencao;

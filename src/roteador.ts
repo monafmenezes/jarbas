@@ -14,6 +14,7 @@ import {
   jaCadastrado,
 } from "./db.ts";
 import { extratoDeHoje } from "./skills/consultar-gastos.ts";
+import { consumoDeHoje } from "./skills/resumo-calorias.ts";
 import { listaDeRemedios } from "./skills/listar-remedios.ts";
 import { ehConfirmacao, confirmarRemedios } from "./skills/confirmar-remedio.ts";
 import { statusDeHoje } from "./skills/status-remedios.ts";
@@ -126,5 +127,10 @@ export async function rotearTexto(
     case "consultar_remedios":
       // "já tomei hoje?" — mostra o status das doses do dia.
       return statusDeHoje(destino);
+
+    case "consultar_calorias":
+      // "quantas calorias comi hoje?" — só lê e soma as refeições do dia,
+      // sem cérebro nem efeito colateral (igual ao consultar_gastos).
+      return consumoDeHoje(destino);
   }
 }
