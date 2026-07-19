@@ -7,8 +7,15 @@
 // banco a cada volta, os lembretes SOBREVIVEM a reiniciar o bot.
 
 import { Cron } from "croner";
-import { lembretesVencidos, marcarAvisado, destinosComGastos } from "./db.ts";
+import {
+  lembretesVencidos,
+  marcarAvisado,
+  destinosComGastos,
+  destinosComRefeicoes,
+} from "./db.ts";
 import { relatorioSemanal } from "./skills/relatorio-financeiro.ts";
+import { resumoDiario } from "./skills/resumo-calorias.ts";
+import { inicioDoDia } from "./tempo.ts";
 import { verificarRemedios } from "./skills/verificar-remedios.ts";
 
 // De quanto em quanto tempo checamos. 30s dá precisão de ~meio minuto, que é de
@@ -70,4 +77,25 @@ export function iniciarAgendador(enviar: Enviar): void {
   });
 
   console.log("📊 Relatório financeiro semanal agendado (domingos, 20h).");
+
+  // Resumo diário de calorias. Também é cron (repete num horário fixo), mas
+  // DIÁRIO em vez de semanal: "0 21 * * *" = todo dia às 21h. A janela do resumo
+  // é "desde a meia-noite de hoje" (inicioDoDia) — o dia civil, não "últimas 24h".
+  //   0    → minuto 0
+  //   21   → 21h (9 da noite), tarde o bastante pra já ter pego o jantar
+  //   * * * → todo dia do mês, todo mês, todo dia da semana
+  new Cron("0 21 * * *", { timezone: "America/Fortaleza" }, async () => {
+    // Só as conversas que registraram refeição HOJE recebem o fechamento.
+    for (const destino of destinosComRefeicoes(inicioDoDia())) {
+      const texto = resumoDiario(destino);
+      if (!texto) continue; // sem refeição hoje: nada a enviar (resumoDiario deu null)
+      try {
+        await enviar(destino, texto);
+      } catch (erro) {
+        console.log(`⚠️ falhou ao mandar o resumo de calorias pra ${destino}:`, erro);
+      }
+    }
+  });
+
+  console.log("🔥 Resumo diário de calorias agendado (todo dia, 21h).");
 }
