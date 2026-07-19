@@ -41,6 +41,7 @@ corrida, estudo, ciclo menstrual e por aí vai. É só ir adicionando (veja o ro
 - [x] **Fase 2 — 💰 Financeiro** · "gastei 45 no mercado" → categoriza, guarda e manda relatório semanal
   - [x] listar os gastos do dia ("quanto gastei hoje?") · _corrigir um gasto lançado: despriorizado_
 - [x] **Fase 3 — 🍽️ Calorias** · foto da refeição → estima o prato e as calorias (visão do `gpt-4o`)
+  - [x] consultar as calorias do dia ("quantas calorias comi hoje?") + resumo diário automático (todo dia às 21h)
 
 ### No radar (backlog de skills)
 
