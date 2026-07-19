@@ -46,7 +46,7 @@ corrida, estudo, ciclo menstrual e por aí vai. É só ir adicionando (veja o ro
 ### No radar (backlog de skills)
 
 **🤖 Assistente & produtividade**
-- [ ] 💬 **Pergunta livre** · qualquer dúvida respondida na hora, tipo um ChatGPT no zap
+- [x] 💬 **Pergunta livre** · qualquer dúvida respondida na hora, tipo um ChatGPT no zap
 - [ ] 🧠 **Segundo cérebro** · "anota que…" / "o que eu falei sobre X?" (busca semântica)
 - [ ] ⏱️ **Foco & estudo** · Pomodoro e registro de horas por matéria, meta semanal
 - [ ] 🃏 **Flashcards** · revisão espaçada (SM-2) — "me pergunta sobre X"
