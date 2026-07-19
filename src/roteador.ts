@@ -15,6 +15,7 @@ import {
 } from "./db.ts";
 import { extratoDeHoje } from "./skills/consultar-gastos.ts";
 import { consumoDeHoje } from "./skills/resumo-calorias.ts";
+import { anotar, consultarMemoria } from "./skills/segundo-cerebro.ts";
 import { listaDeRemedios } from "./skills/listar-remedios.ts";
 import { ehConfirmacao, confirmarRemedios } from "./skills/confirmar-remedio.ts";
 import { statusDeHoje } from "./skills/status-remedios.ts";
@@ -132,5 +133,13 @@ export async function rotearTexto(
       // "quantas calorias comi hoje?" — só lê e soma as refeições do dia,
       // sem cérebro nem efeito colateral (igual ao consultar_gastos).
       return consumoDeHoje(destino);
+
+    case "anotar":
+      // "anota que…" — gera o embedding da nota e guarda (usa o cérebro).
+      return anotar(texto, brain, destino);
+
+    case "consultar_memoria":
+      // "o que eu falei sobre…?" — acha a nota mais parecida por significado.
+      return consultarMemoria(texto, brain, destino);
   }
 }
