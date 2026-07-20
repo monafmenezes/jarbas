@@ -1,0 +1,10 @@
+# O que NÃO copiar pra dentro da imagem Docker (espelha o .gitignore + extras).
+#
+# Por que cada um importa:
+node_modules      # reinstalado limpo dentro da imagem (o do host é do Linux dele)
+.git              # histórico do git não serve pra rodar
+.env              # 🔒 SEGREDOS! chave da OpenAI etc. vão como secret do Container App
+auth              # a sessão do WhatsApp vem do file share em runtime, não da imagem
+data              # o banco vem do file share em runtime, não da imagem
+npm-debug.log
+*.md              # documentação não precisa ir pra imagem
